@@ -1,0 +1,10 @@
+{
+  "name": "Remix  SAVIO FINANCE IA 5",
+  "description": "Plataforma inteligente de gestão financeira pessoal (CPF) e empresarial (MEI/CNPJ) com Inteligência Artificial, leitor de documentos, scanner, boletos, cartões e relatórios.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

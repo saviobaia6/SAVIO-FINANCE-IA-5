@@ -1,0 +1,939 @@
+# PROJETO DE EVOLUÇÃO TÉCNICA DO FINANCE IA
+## Consolidação financeira, integração de receitas, contas bancárias, cartões, dívidas e dashboard
+
+Atue como um **Arquiteto de Software Sênior, Engenheiro Full Stack, Especialista em React/TypeScript, UX/UI Mobile First, FinTech e Auditoria de Sistemas Financeiros**.
+
+Você deverá trabalhar diretamente no código-fonte existente do meu sistema Finance IA.
+
+Não quero apenas uma análise, sugestões, protótipo ou explicações. Quero que você execute as correções e implementações necessárias, alterando os arquivos reais do projeto, preservando o que já funciona e apresentando o código atualizado.
+
+---
+
+# ETAPA 0 — REGRAS OBRIGATÓRIAS
+
+Antes de qualquer modificação:
+
+1. Analise toda a estrutura do projeto.
+2. Identifique a linguagem, framework, arquitetura e sistema de armazenamento.
+3. Localize os módulos de contas, cartões, receitas, salários, despesas, dívidas, importações, dashboard e relatórios.
+4. Leia os arquivos responsáveis pela persistência e pelos cálculos financeiros.
+5. Identifique funções, componentes e serviços já existentes que podem ser reaproveitados.
+6. Não crie funções duplicadas se já existir uma implementação equivalente.
+7. Não substitua o projeto por uma nova aplicação.
+8. Não apague dados existentes.
+9. Não remova funcionalidades que já estejam funcionando.
+10. Não utilize dados fictícios na aplicação real.
+11. Não modifique arquivos sem antes compreender sua finalidade.
+12. Não entregue somente um plano: depois da análise, execute a implementação.
+
+Se houver incompatibilidade entre os códigos de referência abaixo e a arquitetura atual, adapte-os ao projeto, preservando a arquitetura existente.
+
+Faça backup ou crie um ponto de restauração antes das alterações estruturais.
+
+---
+
+# ETAPA 1 — CENTRAL DE CONSOLIDAÇÃO FINANCEIRA
+
+## Objetivo
+
+Criar uma camada central responsável por consolidar as informações existentes do sistema.
+
+A consolidação deverá utilizar os dados já armazenados nos módulos, sem duplicar receitas, despesas, contas, cartões ou dívidas.
+
+A central deverá integrar:
+
+- Contas bancárias.
+- Salários.
+- Receitas adicionais.
+- Receitas do Boticário.
+- MEI.
+- RecargaPay.
+- Nubank.
+- Outras instituições.
+- Despesas.
+- Cartões de crédito.
+- Faturas.
+- Parcelamentos.
+- Dívidas.
+- Transferências internas.
+- Importações de extratos.
+
+## Criar ou adaptar um serviço central
+
+Arquivo sugerido:
+
+`src/domain/finance/FinanceConsolidationService.ts`
+
+Adaptar ao padrão de pastas existente.
+
+Código de referência:
+
+```ts
+export interface FinanceSummary {
+  totalBalance: number;
+  totalIncomeReceived: number;
+  totalIncomeExpected: number;
+  totalExpenses: number;
+  totalExpensesExpected: number;
+  totalOpenInvoices: number;
+  totalDebt: number;
+  monthlyCommitments: number;
+  projectedFreeBalance: number;
+}
+
+export interface FinanceConsolidationInput {
+  accounts: any[];
+  transactions: any[];
+  incomes: any[];
+  cards: any[];
+  debts: any[];
+}
+
+export function consolidateFinance(
+  data: FinanceConsolidationInput
+): FinanceSummary {
+  const totalBalance = data.accounts.reduce(
+    (sum, account) => sum + (account.balance ?? 0),
+    0
+  );
+
+  const totalIncomeReceived = data.incomes
+    .filter(income => income.status === "received")
+    .reduce((sum, income) => sum + (income.amount ?? 0), 0);
+
+  const totalIncomeExpected = data.incomes
+    .filter(income => income.status === "expected")
+    .reduce((sum, income) => sum + (income.amount ?? 0), 0);
+
+  const totalExpenses = data.transactions
+    .filter(transaction =>
+      transaction.type === "expense" &&
+      transaction.status !== "cancelled" &&
+      !transaction.isInternalTransfer &&
+      !transaction.isCardBillPayment
+    )
+    .reduce((sum, transaction) => sum + (transaction.amount ?? 0), 0);
+
+  const totalExpensesExpected = data.transactions
+    .filter(transaction =>
+      transaction.type === "expense" &&
+      transaction.status === "expected"
+    )
+    .reduce((sum, transaction) => sum + (transaction.amount ?? 0), 0);
+
+  const totalOpenInvoices = data.cards.reduce(
+    (sum, card) => sum + (card.openInvoiceAmount ?? 0),
+    0
+  );
+
+  const totalDebt = data.debts.reduce(
+    (sum, debt) => sum + (debt.remainingBalance ?? 0),
+    0
+  );
+
+  const monthlyCommitments = data.debts.reduce(
+    (sum, debt) => sum + (debt.monthlyInstallment ?? 0),
+    0
+  );
+
+  const projectedFreeBalance =
+    totalBalance +
+    totalIncomeExpected -
+    totalExpensesExpected -
+    totalOpenInvoices -
+    monthlyCommitments;
+
+  return {
+    totalBalance,
+    totalIncomeReceived,
+    totalIncomeExpected,
+    totalExpenses,
+    totalExpensesExpected,
+    totalOpenInvoices,
+    totalDebt,
+    monthlyCommitments,
+    projectedFreeBalance
+  };
+}
+```
+
+### Atenção técnica
+
+O código acima é uma referência inicial, não deve ser copiado cegamente.
+
+Audite os cálculos antes de integrá-los.
+
+Não subtraia faturas, dívidas ou compromissos duas vezes.
+
+Não misture saldo atual com fluxo mensal.
+
+Não misture receitas previstas com receitas recebidas.
+
+Não utilize `totalBalance` como sinônimo de dinheiro livre.
+
+A projeção deve considerar datas, pagamentos, transferências, faturas, compromissos e o período selecionado.
+
+Se a estrutura atual possuir um `BalanceCalculator`, `consolidationEngine` ou outro motor financeiro, reutilize-o e amplie suas funcionalidades, evitando criar um segundo motor concorrente.
+
+---
+
+# ETAPA 2 — INTEGRAR TODAS AS RECEITAS
+
+## Objetivo
+
+O salário não deve ser a única receita reconhecida no sistema.
+
+O sistema deve identificar e consolidar:
+
+- Salário principal.
+- Boticário.
+- RecargaPay.
+- Nubank.
+- MEI.
+- Rendimentos adicionais.
+- Receitas eventuais.
+- Outras fontes cadastradas pelo usuário.
+
+Cada receita deverá possuir origem identificável.
+
+## Estrutura de receita de referência
+
+Adaptar ao modelo atual:
+
+```ts
+export interface IncomeSource {
+  id: string;
+  name: string;
+  sourceType:
+    | "salary"
+    | "business"
+    | "mei"
+    | "extra"
+    | "investment"
+    | "other";
+
+  amount: number;
+  expectedAmount?: number;
+
+  status:
+    | "expected"
+    | "received"
+    | "overdue"
+    | "cancelled";
+
+  expectedDate?: string;
+  receivedDate?: string;
+
+  accountId?: string;
+  category?: string;
+  recurrence?: "monthly" | "weekly" | "yearly" | "none";
+
+  origin:
+    | "manual"
+    | "import"
+    | "salary"
+    | "bank_statement";
+
+  description?: string;
+}
+```
+
+## Implementações necessárias
+
+1. Integrar o salário ao dashboard.
+2. Integrar rendimentos adicionais.
+3. Integrar receitas comerciais.
+4. Permitir identificar receitas do Boticário.
+5. Permitir identificar receitas do MEI.
+6. Permitir identificar entradas via RecargaPay.
+7. Permitir identificar entradas via Nubank.
+8. Permitir cadastrar novas fontes de receita.
+9. Permitir filtrar por origem.
+10. Permitir filtrar por período.
+11. Mostrar receitas previstas.
+12. Mostrar receitas efetivamente recebidas.
+13. Mostrar receitas atrasadas.
+14. Mostrar histórico mensal.
+15. Mostrar percentual de participação de cada fonte.
+
+Não classifique automaticamente uma transferência interna como receita.
+
+Não classifique movimentações entre contas do próprio usuário como renda.
+
+---
+
+# ETAPA 3 — DASHBOARD FINANCEIRO PRINCIPAL
+
+Atualize o `DashboardView.tsx` ou o componente equivalente existente.
+
+O dashboard deverá exibir:
+
+## Indicadores principais
+
+- Saldo consolidado das contas.
+- Receitas recebidas no mês.
+- Receitas previstas.
+- Despesas realizadas.
+- Despesas previstas.
+- Faturas abertas.
+- Dívidas totais.
+- Compromissos mensais.
+- Saldo projetado.
+- Saldo livre estimado.
+
+## Layout mobile first
+
+Organize os componentes em:
+
+1. Cabeçalho com período selecionado.
+2. Saldo consolidado.
+3. Card de receitas.
+4. Card de despesas.
+5. Card de faturas.
+6. Card de dívidas.
+7. Card de saldo projetado.
+8. Gráfico de fluxo financeiro.
+9. Gráfico de receitas por origem.
+10. Gráfico de despesas por categoria.
+11. Lista de contas bancárias.
+12. Lista de cartões.
+13. Próximos vencimentos.
+
+Permita ocultar valores sensíveis por meio de um botão de privacidade.
+
+## Exemplo de componente
+
+Adaptar ao padrão visual do projeto:
+
+```tsx
+interface FinanceSummaryCardProps {
+  title: string;
+  amount: number;
+  description?: string;
+  icon?: React.ReactNode;
+}
+
+export function FinanceSummaryCard({
+  title,
+  amount,
+  description,
+  icon
+}: FinanceSummaryCardProps) {
+  const formattedAmount = amount.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL"
+  });
+
+  return (
+    <div className="finance-summary-card">
+      <div className="finance-summary-card__header">
+        {icon}
+        <span>{title}</span>
+      </div>
+
+      <strong className="finance-summary-card__amount">
+        {formattedAmount}
+      </strong>
+
+      {description && (
+        <small>{description}</small>
+      )}
+    </div>
+  );
+}
+```
+
+Criar ou adaptar CSS para:
+
+- Responsividade.
+- Cards.
+- Hierarquia de informação.
+- Contraste.
+- Espaçamento.
+- Valores monetários.
+- Estados de carregamento.
+- Estados vazios.
+- Acessibilidade.
+
+Não deixe o dashboard com excesso de cards.
+
+Priorize as informações que realmente ajudam o usuário a tomar decisões financeiras.
+
+---
+
+# ETAPA 4 — GRÁFICOS DE RECEITAS
+
+Criar um gráfico específico para identificar de onde vem o dinheiro.
+
+Exemplo de estrutura:
+
+```ts
+export interface IncomeChartItem {
+  source: string;
+  amount: number;
+}
+```
+
+Agrupar receitas por fonte.
+
+Exemplo:
+
+```ts
+const incomeBySource = incomes.reduce((result, income) => {
+  if (income.status !== "received") return result;
+
+  const source = income.sourceName || income.category || "Outros";
+
+  result[source] = (result[source] || 0) + income.amount;
+
+  return result;
+}, {} as Record<string, number>);
+```
+
+Transformar em estrutura para o gráfico:
+
+```ts
+const incomeChartData = Object.entries(incomeBySource).map(
+  ([source, amount]) => ({
+    source,
+    amount
+  })
+);
+```
+
+Criar gráfico que permita visualizar:
+
+- Salário.
+- Boticário.
+- MEI.
+- RecargaPay.
+- Nubank.
+- Extras.
+- Outras fontes.
+
+Permitir:
+
+- Gráfico de barras.
+- Gráfico de distribuição.
+- Comparativo mensal.
+- Seleção de período.
+- Clique na fonte para abrir seus lançamentos.
+
+Utilizar a biblioteca de gráficos já instalada no projeto.
+
+Não instalar outra biblioteca sem necessidade.
+
+---
+
+# ETAPA 5 — PAINEL INDIVIDUAL DAS CONTAS BANCÁRIAS
+
+Atualizar:
+
+`AccountsView.tsx`
+
+Criar uma tela ou modal de detalhes da conta.
+
+Ao clicar em uma instituição, abrir um painel individual.
+
+Exemplo de navegação:
+
+```tsx
+const [selectedAccountId, setSelectedAccountId] =
+  useState<string | null>(null);
+
+const selectedAccount = accounts.find(
+  account => account.id === selectedAccountId
+);
+```
+
+Adaptar ao padrão de navegação existente.
+
+## Tela individual da conta
+
+Exibir:
+
+- Logo ou ícone da instituição.
+- Nome da conta.
+- Tipo da conta.
+- Saldo atual.
+- Saldo inicial.
+- Entradas do mês.
+- Saídas do mês.
+- Evolução do saldo.
+- Histórico.
+- Categorias.
+- Transferências.
+- Receitas vinculadas.
+- Despesas vinculadas.
+
+## Serviço de análise por conta
+
+Criar ou adaptar:
+
+`src/domain/accounts/AccountAnalyticsService.ts`
+
+Código de referência:
+
+```ts
+export interface AccountAnalytics {
+  accountId: string;
+  currentBalance: number;
+  totalIncome: number;
+  totalExpenses: number;
+  transactionCount: number;
+}
+
+export function calculateAccountAnalytics(
+  accountId: string,
+  transactions: any[],
+  accounts: any[]
+): AccountAnalytics {
+  const account = accounts.find(
+    item => item.id === accountId
+  );
+
+  const accountTransactions = transactions.filter(
+    transaction =>
+      transaction.accountId === accountId &&
+      transaction.status !== "cancelled"
+  );
+
+  const totalIncome = accountTransactions
+    .filter(transaction =>
+      transaction.type === "income" &&
+      !transaction.isInternalTransfer
+    )
+    .reduce(
+      (sum, transaction) => sum + transaction.amount,
+      0
+    );
+
+  const totalExpenses = accountTransactions
+    .filter(transaction =>
+      transaction.type === "expense" &&
+      !transaction.isInternalTransfer &&
+      !transaction.isCardBillPayment
+    )
+    .reduce(
+      (sum, transaction) => sum + transaction.amount,
+      0
+    );
+
+  return {
+    accountId,
+    currentBalance: account?.balance ?? 0,
+    totalIncome,
+    totalExpenses,
+    transactionCount: accountTransactions.length
+  };
+}
+```
+
+Ajustar os tipos, status, regras de transferências e saldo ao sistema real.
+
+## Gráficos da conta
+
+Implementar:
+
+1. Entradas x saídas mensais.
+2. Evolução do saldo.
+3. Despesas por categoria.
+4. Receitas por origem.
+5. Comparativo mensal.
+
+## Regras
+
+O gráfico deverá mostrar somente movimentações daquela conta.
+
+Não misturar Nubank com RecargaPay.
+
+Não misturar cartões com contas bancárias.
+
+Não duplicar movimentações de transferências.
+
+Não utilizar dados fictícios.
+
+---
+
+# ETAPA 6 — PAINEL INDIVIDUAL DOS CARTÕES DE CRÉDITO
+
+Atualizar:
+
+`CardsView.tsx`
+
+Cada cartão deverá possuir um painel analítico individual.
+
+Exibir:
+
+- Nome.
+- Instituição.
+- Limite total.
+- Limite utilizado.
+- Limite disponível.
+- Percentual de utilização.
+- Fatura atual.
+- Próxima fatura.
+- Data de fechamento.
+- Data de vencimento.
+- Parcelamentos.
+- Histórico.
+- Evolução das faturas.
+
+## Cálculo de limite
+
+```ts
+export interface CardLimitAnalysis {
+  totalLimit: number;
+  usedLimit: number;
+  availableLimit: number;
+  usagePercentage: number;
+}
+
+export function calculateCardLimit(
+  totalLimit: number,
+  usedLimit: number
+): CardLimitAnalysis {
+  const safeLimit = Math.max(totalLimit, 0);
+  const safeUsed = Math.max(usedLimit, 0);
+
+  const availableLimit = Math.max(
+    safeLimit - safeUsed,
+    0
+  );
+
+  const usagePercentage =
+    safeLimit > 0
+      ? Math.min((safeUsed / safeLimit) * 100, 100)
+      : 0;
+
+  return {
+    totalLimit: safeLimit,
+    usedLimit: safeUsed,
+    availableLimit,
+    usagePercentage
+  };
+}
+```
+
+## Gráficos de cartão
+
+Implementar:
+
+- Utilização do limite.
+- Gastos por categoria.
+- Evolução mensal.
+- Comparação das faturas.
+- Gastos parcelados.
+- Gastos à vista.
+- Histórico de compras.
+
+## Filtros
+
+- Mês.
+- Ano.
+- Período.
+- Categoria.
+- Status.
+- Parcelamento.
+
+## Regra crítica
+
+A compra no cartão deve ser registrada como despesa no momento correto, mas o pagamento da fatura não poderá gerar uma nova despesa equivalente.
+
+O pagamento da fatura deve ser tratado como liquidação de um compromisso financeiro, reduzindo o saldo bancário e a obrigação do cartão, sem duplicar a despesa original.
+
+---
+
+# ETAPA 7 — DÍVIDAS, PARCELAS E COMPROMETIMENTO
+
+Atualizar `DebtsView.tsx`.
+
+Exibir:
+
+- Valor total contratado.
+- Saldo devedor.
+- Total já pago.
+- Parcelas restantes.
+- Valor da parcela.
+- Próximo vencimento.
+- Credor.
+- Taxa de juros.
+- Evolução do saldo.
+- Comprometimento mensal.
+
+## Criar análise de dívidas
+
+Código de referência:
+
+```ts
+export interface DebtAnalytics {
+  totalDebt: number;
+  totalPaid: number;
+  totalMonthlyInstallments: number;
+  debtCount: number;
+}
+
+export function calculateDebtAnalytics(
+  debts: any[]
+): DebtAnalytics {
+  const activeDebts = debts.filter(
+    debt => debt.status !== "paid" &&
+             debt.status !== "cancelled"
+  );
+
+  return {
+    totalDebt: activeDebts.reduce(
+      (sum, debt) => sum + (debt.remainingBalance ?? 0),
+      0
+    ),
+
+    totalPaid: debts.reduce(
+      (sum, debt) => sum + (debt.totalPaid ?? 0),
+      0
+    ),
+
+    totalMonthlyInstallments: activeDebts.reduce(
+      (sum, debt) => sum + (debt.monthlyInstallment ?? 0),
+      0
+    ),
+
+    debtCount: activeDebts.length
+  };
+}
+```
+
+Adaptar os campos à estrutura real das dívidas.
+
+Criar gráficos de:
+
+- Saldo devedor.
+- Evolução do pagamento.
+- Parcelas mensais.
+- Comprometimento da renda.
+- Projeção de quitação.
+
+---
+
+# ETAPA 8 — SISTEMA DE FILTROS GLOBAIS
+
+Criar ou aprimorar filtros reutilizáveis.
+
+Os filtros deverão funcionar nos gráficos e indicadores:
+
+- Mês.
+- Ano.
+- Período personalizado.
+- Instituição.
+- Conta.
+- Cartão.
+- Categoria.
+- Tipo de movimentação.
+- Origem da receita.
+- Status.
+
+Os filtros devem ser sincronizados quando fizer sentido, mas cada painel individual deverá respeitar sua própria seleção.
+
+Não crie filtros redundantes.
+
+---
+
+# ETAPA 9 — IMPORTAÇÃO E INTELIGÊNCIA DE CLASSIFICAÇÃO
+
+Auditar os módulos de importação de PDF, Excel e extratos bancários.
+
+Garantir que o sistema:
+
+1. Identifique a instituição.
+2. Identifique a conta.
+3. Identifique a origem do lançamento.
+4. Identifique receitas.
+5. Identifique despesas.
+6. Identifique transferências.
+7. Identifique compras de cartão.
+8. Identifique pagamentos de faturas.
+9. Identifique parcelamentos.
+10. Sugira categorias.
+11. Preserve a descrição original.
+12. Permita correção manual.
+13. Evite duplicidade.
+14. Mantenha rastreabilidade.
+
+## Regras para importação
+
+Não classificar automaticamente uma transação com baixa confiança.
+
+Criar mecanismo de revisão quando necessário.
+
+Preservar o documento original e a informação de origem.
+
+Se houver divergência de saldo, apresentar alerta.
+
+Não alterar o saldo silenciosamente.
+
+---
+
+# ETAPA 10 — COMPONENTES VISUAIS REUTILIZÁVEIS
+
+Criar ou reutilizar componentes:
+
+- FinanceSummaryCard.
+- IncomeSourceCard.
+- AccountCard.
+- AccountAnalytics.
+- CreditCardAnalytics.
+- DebtAnalytics.
+- FinanceChart.
+- MonthlyComparison.
+- TransactionList.
+- PeriodFilter.
+- BalanceVisibilityToggle.
+
+Antes de criar qualquer componente, verificar se existe equivalente.
+
+## Padrão de interface
+
+- Mobile First.
+- Layout responsivo.
+- Cards com hierarquia visual.
+- Ícones coerentes.
+- Valores monetários alinhados.
+- Gráficos legíveis.
+- Contraste acessível.
+- Espaçamento consistente.
+- Estados vazios.
+- Skeleton de carregamento.
+- Feedback de erro.
+- Privacidade de valores.
+- Navegação intuitiva.
+
+---
+
+# ETAPA 11 — TESTES OBRIGATÓRIOS
+
+Não finalizar sem executar os testes possíveis no ambiente.
+
+## Testes financeiros
+
+Validar:
+
+- Soma das contas.
+- Receitas recebidas.
+- Receitas previstas.
+- Despesas realizadas.
+- Despesas futuras.
+- Faturas.
+- Transferências.
+- Dívidas.
+- Saldo projetado.
+- Saldo livre.
+- Parcelamentos.
+
+## Testes de duplicidade
+
+Validar:
+
+- Importação repetida do mesmo extrato.
+- Receita importada e cadastrada manualmente.
+- Transferência entre contas.
+- Compra de cartão.
+- Pagamento de fatura.
+- Parcelamento.
+- Movimentação com descrição semelhante.
+
+## Testes visuais
+
+Validar:
+
+- Mobile.
+- Tablet.
+- Desktop.
+- Gráficos sem dados.
+- Gráficos com grande volume de dados.
+- Valores negativos.
+- Valores zerados.
+- Filtros.
+- Navegação entre módulos.
+
+## Testes de regressão
+
+Garantir que continuem funcionando:
+
+- Cadastro de contas.
+- Cadastro de cartões.
+- Cadastro de receitas.
+- Cadastro de despesas.
+- Importação de PDF.
+- Importação de Excel.
+- Dashboard.
+- Relatórios.
+- Dívidas.
+- Transferências.
+- Persistência.
+- Sincronização.
+- Backup.
+
+---
+
+# ETAPA 12 — EXECUÇÃO E ENTREGA
+
+Executar as alterações seguindo esta ordem:
+
+### Fase A
+Auditar arquivos e identificar dependências.
+
+### Fase B
+Centralizar cálculos e consolidar receitas.
+
+### Fase C
+Atualizar o dashboard principal.
+
+### Fase D
+Implementar análise individual das contas bancárias.
+
+### Fase E
+Implementar análise individual dos cartões.
+
+### Fase F
+Aprimorar dívidas e compromissos.
+
+### Fase G
+Integrar filtros e gráficos.
+
+### Fase H
+Validar importações e duplicidades.
+
+### Fase I
+Executar testes e corrigir erros.
+
+### Fase J
+Apresentar o relatório final.
+
+## Relatório final obrigatório
+
+Ao finalizar, apresentar:
+
+1. Arquivos analisados.
+2. Arquivos modificados.
+3. Arquivos criados.
+4. Funcionalidades implementadas.
+5. Funcionalidades preservadas.
+6. Problemas corrigidos.
+7. Regras financeiras implementadas.
+8. Gráficos criados.
+9. Testes executados.
+10. Resultado do build.
+11. Erros encontrados.
+12. Erros corrigidos.
+13. Problemas que ainda dependem de ação manual.
+14. Riscos de integridade de dados.
+15. Próximas melhorias.
+
+Não declare um teste como aprovado se ele não tiver sido executado.
+
+Não declare uma funcionalidade como concluída se ela estiver somente visualmente implementada.
+
+Não entregue códigos incompletos, funções desconectadas ou componentes que não estejam integrados ao sistema.
+
+**OBJETIVO FINAL:**
+
+Transformar o Finance IA em uma plataforma financeira pessoal integrada, onde todas as contas, receitas, despesas, cartões, dívidas e importações compartilhem uma base consistente, com análises individuais e consolidadas, gráficos funcionais e projeções financeiras confiáveis, mantendo todos os dados existentes e a compatibilidade com o sistema atual.
