@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useDeferredValue, useRef } from 'react';
-import { Transaction, OPERATION_TYPE_LABELS, LedgerDrilldownFilter } from '../types';
+import { Account, Transaction, OPERATION_TYPE_LABELS, LedgerDrilldownFilter } from '../types';
 import {
   filterTransactionsByPeriod,
   calculatePeriodMetricsCents,
@@ -12,9 +12,11 @@ import { VirtualCardList, computeWindowedRange } from './VirtualList';
 import { Search, Plus, Trash2, Pencil, RotateCcw, X, Eye } from 'lucide-react';
 import { usePrivacy } from '../contexts/PrivacyContext';
 import { formatarValor } from '../utils/formatters';
+import { BankLogo } from './BankLogo';
 
 interface CpfViewProps {
   transactions: Transaction[];
+  accounts?: Account[];
   period: string;
   drilldownFilter?: LedgerDrilldownFilter | null;
   onClearDrilldownFilter?: () => void;
@@ -27,6 +29,7 @@ interface CpfViewProps {
 
 export const CpfView: React.FC<CpfViewProps> = ({
   transactions,
+  accounts = [],
   period,
   drilldownFilter = null,
   onClearDrilldownFilter,
@@ -38,6 +41,10 @@ export const CpfView: React.FC<CpfViewProps> = ({
 }) => {
   const { hideValues } = usePrivacy();
   const isDesktop = useIsDesktop();
+  const accountById = useMemo(
+    () => new Map(accounts.map((a) => [a.id, a])),
+    [accounts]
+  );
   const [search, setSearch] = useState('');
   const deferredSearch = useDeferredValue(search);
   const [selectedCategory, setSelectedCategory] = useState('ALL');
@@ -299,15 +306,26 @@ export const CpfView: React.FC<CpfViewProps> = ({
               const displayAmount = fromCents(getTransactionAmountCents(t));
               const isConfirmed = t.status === 'CONFIRMED';
               const hasReversalLock = Boolean(t.reversedTransactionId || t.reversalTransactionId);
+              const acc = t.accountId ? accountById.get(t.accountId) : undefined;
               return (
                 <div className="p-4 space-y-2">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="font-bold text-sm text-slate-900 dark:text-white truncate">
-                        {t.description}
-                      </div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        {t.date.split('-').reverse().join('/')} · {t.account}
+                    <div className="flex items-start gap-2.5 min-w-0">
+                      <BankLogo
+                        bankName={acc?.institutionName || t.account || 'Banco'}
+                        bankCode={acc?.bankCode}
+                        logoUrl={acc?.logoUrl}
+                        size={36}
+                        className="mt-0.5"
+                      />
+                      <div className="min-w-0">
+                        <div className="font-bold text-sm text-slate-900 dark:text-white truncate">
+                          {t.description}
+                        </div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                          {t.date.split('-').reverse().join('/')} ·{' '}
+                          {acc ? `${acc.institutionName} · ${acc.accountName}` : t.account}
+                        </div>
                       </div>
                     </div>
                     <div
@@ -475,7 +493,24 @@ export const CpfView: React.FC<CpfViewProps> = ({
                             {t.category}
                           </span>
                         </td>
-                        <td className="py-3.5 px-6 text-slate-600 dark:text-slate-300">{t.account}</td>
+                        <td className="py-3.5 px-6 text-slate-600 dark:text-slate-300">
+                          {(() => {
+                            const acc = t.accountId ? accountById.get(t.accountId) : undefined;
+                            return (
+                              <div className="flex items-center gap-2 min-w-0">
+                                <BankLogo
+                                  bankName={acc?.institutionName || t.account || 'Banco'}
+                                  bankCode={acc?.bankCode}
+                                  logoUrl={acc?.logoUrl}
+                                  size={28}
+                                />
+                                <span className="truncate">
+                                  {acc ? `${acc.institutionName} · ${acc.accountName}` : t.account}
+                                </span>
+                              </div>
+                            );
+                          })()}
+                        </td>
                         <td
                           className={`font-money py-3.5 px-6 text-right font-bold ${
                             t.direction === 'INCOME'

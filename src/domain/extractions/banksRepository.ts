@@ -1,3 +1,5 @@
+export * from './institutionPresets';
+
 export type BankType = 'fisico' | 'digital';
 export type DetectedBankType = BankType | 'desconhecido';
 export type DetectionConfidence = 'alta' | 'media' | 'baixa';
@@ -94,6 +96,8 @@ const EXTRA_VISUAL_CATALOG: BankVisualCatalogItem[] = [
   { id: 'bnb', nome: 'Banco do Nordeste', sigla: 'BN', codigo: '004', tipo: 'Banco Físico', grupo: 'Fisico', cor: '#A6192E', texto: '#FFFFFF', institutionId: 'inst-bnb', aliases: ['banco do nordeste', 'bnb'] },
   { id: 'basa', nome: 'Banco da Amazônia', sigla: 'BA', codigo: '003', tipo: 'Banco Físico', grupo: 'Fisico', cor: '#007A33', texto: '#FFFFFF', institutionId: 'inst-basa', aliases: ['banco da amazonia', 'basa'] },
   { id: 'xp', nome: 'XP Investimentos', sigla: 'XP', codigo: '102', tipo: 'Corretora / Digital', grupo: 'Digital', cor: '#111827', texto: '#FACC15', institutionId: 'inst-xp', aliases: ['xp', 'xp investimentos'] },
+  { id: 'rico', nome: 'Rico Investimentos', sigla: 'RICO', codigo: '102', tipo: 'Corretora e Banco', grupo: 'Digital', cor: '#FF5500', texto: '#FFFFFF', institutionId: 'inst_rico', aliases: ['rico', 'rico investimentos', 'rico corretora', 'cartao rico'] },
+  { id: 'clear', nome: 'Clear Corretora', sigla: 'CLEAR', codigo: '102', tipo: 'Corretora', grupo: 'Digital', cor: '#00D4FF', texto: '#0F172A', institutionId: 'inst_clear', aliases: ['clear', 'clear corretora', 'clear investimentos'] },
   { id: 'cora', nome: 'Cora', sigla: 'CO', codigo: '403', tipo: 'Banco PJ Digital', grupo: 'Digital', cor: '#FE3E6D', texto: '#FFFFFF', institutionId: 'inst-cora', aliases: ['cora'] },
   { id: 'stone', nome: 'Stone', sigla: 'ST', codigo: '197', tipo: 'Conta PJ Digital', grupo: 'Digital', cor: '#00A868', texto: '#FFFFFF', institutionId: 'inst-stone', aliases: ['stone'] },
   { id: 'bv', nome: 'Banco BV', sigla: 'BV', codigo: '655', tipo: 'Banco Digital', grupo: 'Digital', cor: '#1D4ED8', texto: '#FFFFFF', institutionId: 'inst-neon', aliases: ['bv', 'banco bv', 'votorantim', 'neon/bv'] },
@@ -318,7 +322,23 @@ export const BANKS_REPOSITORY: BankRepositoryEntry[] = [
     nome: 'XP Investimentos',
     tipo: 'digital',
     institutionId: 'inst-xp',
-    aliases: ['xp investimentos', 'banco xp', 'xp cctvm', 'rico investimentos', 'clear corretora'],
+    aliases: ['xp investimentos', 'banco xp', 'xp cctvm'],
+  },
+  {
+    codigo: '102',
+    ispb: '02332886',
+    nome: 'Rico Investimentos',
+    tipo: 'digital',
+    institutionId: 'inst_rico',
+    aliases: ['rico', 'rico investimentos', 'rico corretora', 'cartao rico', 'rico visa infinite'],
+  },
+  {
+    codigo: '102',
+    ispb: '02332886',
+    nome: 'Clear Corretora',
+    tipo: 'digital',
+    institutionId: 'inst_clear',
+    aliases: ['clear', 'clear corretora', 'clear investimentos'],
   },
   {
     codigo: '403',
@@ -614,6 +634,36 @@ export function findBankVisualBranding(
     texto: '#FFFFFF',
     codigo: normCode || undefined,
     nome: institutionName || undefined,
+  };
+}
+
+export interface BankIdentityResolution {
+  catalogId?: string;
+  nome: string;
+  codigo?: string;
+  sigla: string;
+  cor: string;
+  texto: string;
+  isKnownCatalogBank: boolean;
+}
+
+export function resolveBankIdentity(
+  bankName?: string,
+  bankCode?: string
+): BankIdentityResolution {
+  const branding = findBankVisualBranding(bankName, bankCode);
+  const catalogEntry = branding.id
+    ? ALL_INSTITUTION_CATALOG.find((item) => item.id === branding.id)
+    : undefined;
+
+  return {
+    catalogId: catalogEntry?.id ?? branding.id,
+    nome: catalogEntry?.nome || branding.nome || bankName?.trim() || 'Instituição Bancária',
+    codigo: catalogEntry?.codigo || branding.codigo || normalizeCompeCode(bankCode) || undefined,
+    sigla: catalogEntry?.sigla || branding.sigla,
+    cor: catalogEntry?.cor || branding.cor,
+    texto: catalogEntry?.texto || branding.texto,
+    isKnownCatalogBank: Boolean(catalogEntry),
   };
 }
 

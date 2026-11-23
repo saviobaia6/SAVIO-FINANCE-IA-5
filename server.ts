@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import { APP_CATEGORIES, OPERATION_TYPES } from './src/types.ts';
 import {
   AiTimeoutError,
+  AuditCardInvoiceRequestSchema,
   ChatRequestSchema,
   ExtractedBoletoSchema,
   ExtractedDocBatchSchema,
@@ -16,6 +17,11 @@ import {
   sanitizeTextInput,
   withTimeout,
 } from './src/server/aiGuard.ts';
+import {
+  INVOICE_AUDITOR_CATEGORIES,
+  auditCardCsvContent,
+  sanitizeAuditedInvoiceResult,
+} from './src/domain/cards/CardInvoiceAuditorService.ts';
 import { createInvestmentRouter } from './server/routes/investmentRoutes.ts';
 
 dotenv.config();
@@ -439,6 +445,164 @@ ${cleanText ? `\nTexto adicional:\n${cleanText}` : ''}`;
       const formatted = formatAiErrorResponse(error);
       console.error('Parse boleto error:', formatted.status);
       res.status(formatted.status).json({ error: formatted.message });
+    }
+  });
+
+  // Financial Auditor for Credit Card Invoices (PDF, Image/Print, or CSV -> strict JSON schema)
+  app.post('/api/ai/audit-card-invoice', async (req, res) => {
+    const parsedBody = AuditCardInvoiceRequestSchema.safeParse(req.body);
+    if (!parsedBody.success) {
+      return res.status(400).json({
+        error: 'Envie um arquivo PDF, imagem (PNG/JPG/WEBP) ou CSV válido para auditoria da fatura.',
+      });
+    }
+
+    const { fileName, textContent, fileData } = parsedBody.data;
+    const lowName = (fileName || '').toLowerCase();
+    const isCsv =
+      lowName.endsWith('.csv') ||
+      Boolean(fileData?.mimeType && (fileData.mimeType.includes('csv') || fileData.mimeType === 'application/vnd.ms-excel'));
+
+    // Decode CSV text when applicable so it can be audited deterministically or inspected as text by Gemini
+    let decodedCsvText = '';
+    if (isCsv) {
+      if (textContent?.trim()) {
+        decodedCsvText = textContent;
+      } else if (fileData?.base64) {
+        const buf = Buffer.from(fileData.base64, 'base64');
+        const utf8 = buf.toString('utf8');
+        decodedCsvText = utf8.includes('\uFFFD') ? buf.toString('latin1') : utf8;
+      }
+    }
+
+    // If AI key is absent: allow deterministic CSV audit cleanly, but require GEMINI_API_KEY for PDF/Image OCR
+    if (!ai) {
+      if (isCsv && decodedCsvText.trim()) {
+        return res.json(auditCardCsvContent(decodedCsvText, fileName));
+      }
+      return res.status(503).json({
+        error:
+          'Auditor financeiro de PDF/imagem indisponível: configure GEMINI_API_KEY nos segredos do servidor.',
+      });
+    }
+
+    try {
+      const parts: Array<{ inlineData?: { mimeType: string; data: string }; text?: string }> = [];
+
+      if (fileData && !isCsv) {
+        let finalMime = fileData.mimeType;
+        if (lowName.endsWith('.pdf') || finalMime.includes('pdf')) {
+          finalMime = 'application/pdf';
+        } else if (lowName.endsWith('.png')) {
+          finalMime = 'image/png';
+        } else if (lowName.endsWith('.webp')) {
+          finalMime = 'image/webp';
+        } else if (lowName.endsWith('.jpg') || lowName.endsWith('.jpeg')) {
+          finalMime = 'image/jpeg';
+        }
+        parts.push({
+          inlineData: {
+            mimeType: finalMime,
+            data: fileData.base64,
+          },
+        });
+      }
+
+      const systemInstruction = `Você é um auditor financeiro especializado em extração de dados de faturas de cartão de crédito e extratos bancários brasileiros.
+Sua tarefa é analisar o documento enviado (${sanitizeTextInput(fileName || 'fatura', 150)}) e extrair todas as transações de compras, tarifas, IOF e estornos.
+
+REGRAS ESTRITAS:
+1. Ignore linhas de "Pagamento de fatura", "Pagamento recebido", "Saldo anterior", "Crédito de pagamento" ou limites disponíveis. Extraia apenas compras, tarifas, IOF e estornos.
+2. Para estornos ou descontos na fatura, retorne o valor como número negativo (ex: -50.00).
+3. Identifique compras parceladas (ex: "LOJA X 02/10" ou "PARC 2 DE 10"), retornando "tipo": "parcelada", "parcela_atual" e "total_parcelas", e limpando o marcador de parcela do campo "descricao". Se não houver indicação de parcela, defina "tipo": "avista", "parcela_atual": 1 e "total_parcelas": 1.
+4. Classifique cada item EXCLUSIVAMENTE em uma das seguintes categorias: ${INVOICE_AUDITOR_CATEGORIES.join(', ')}.
+5. Nunca invente valores ou datas. Retorne EXCLUSIVAMENTE um JSON válido seguindo o schema.`;
+
+      const promptLines = [
+        'Extraia resumo_fatura (vencimento YYYY-MM-DD ou null, e valor_total_identificado) e a lista transacoes conforme as regras estritas.',
+      ];
+      if (decodedCsvText.trim()) {
+        promptLines.push(`Conteúdo CSV da fatura:\n${sanitizeTextInput(decodedCsvText, 55000)}`);
+      } else if (textContent?.trim()) {
+        promptLines.push(`Texto adicional:\n${sanitizeTextInput(textContent, 55000)}`);
+      }
+      parts.push({ text: promptLines.join('\n\n') });
+
+      const response = await generateWithRetry(
+        () =>
+          ai.models.generateContent({
+            model: GEMINI_MODEL,
+            contents: { parts },
+            config: {
+              systemInstruction,
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  resumo_fatura: {
+                    type: Type.OBJECT,
+                    properties: {
+                      vencimento: {
+                        type: Type.STRING,
+                        nullable: true,
+                        description: 'Data de vencimento YYYY-MM-DD ou null',
+                      },
+                      valor_total_identificado: { type: Type.NUMBER },
+                    },
+                    required: ['vencimento', 'valor_total_identificado'],
+                  },
+                  transacoes: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        data: { type: Type.STRING, description: 'Data YYYY-MM-DD' },
+                        descricao: { type: Type.STRING, description: 'Nome limpo do estabelecimento' },
+                        valor: { type: Type.NUMBER, description: 'Negativo para estornos/descontos' },
+                        tipo: { type: Type.STRING, enum: ['avista', 'parcelada'] },
+                        parcela_atual: { type: Type.INTEGER },
+                        total_parcelas: { type: Type.INTEGER },
+                        categoria: {
+                          type: Type.STRING,
+                          enum: [...INVOICE_AUDITOR_CATEGORIES],
+                        },
+                      },
+                      required: [
+                        'data',
+                        'descricao',
+                        'valor',
+                        'tipo',
+                        'parcela_atual',
+                        'total_parcelas',
+                        'categoria',
+                      ],
+                    },
+                  },
+                },
+                required: ['resumo_fatura', 'transacoes'],
+              },
+            },
+          }),
+        2,
+        AI_OCR_TIMEOUT_MS
+      );
+
+      const rawJson = JSON.parse((response.text ?? '{}').trim());
+      const sanitized = sanitizeAuditedInvoiceResult(rawJson);
+
+      // If AI returned 0 items on a CSV that deterministic CSV parser handles cleanly, fallback to deterministic CSV audit
+      if (isCsv && sanitized.transacoes.length === 0 && decodedCsvText.trim()) {
+        return res.json(auditCardCsvContent(decodedCsvText, fileName));
+      }
+
+      return res.json(sanitized);
+    } catch (error: unknown) {
+      if (isCsv && decodedCsvText.trim()) {
+        return res.json(auditCardCsvContent(decodedCsvText, fileName));
+      }
+      const formatted = formatAiErrorResponse(error);
+      console.error('Audit card invoice error:', formatted.status);
+      return res.status(formatted.status).json({ error: formatted.message });
     }
   });
 

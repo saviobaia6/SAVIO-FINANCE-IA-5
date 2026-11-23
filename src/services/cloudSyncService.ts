@@ -236,6 +236,8 @@ function serializeAccountDoc(
     ownerUid: uid,
     entityId: acc.entityId === 'CNPJ' ? 'CNPJ' : 'CPF',
     institutionName: clampStr(acc.institutionName, 120, 'Instituição'),
+    ...(acc.bankCode ? { bankCode: clampStr(acc.bankCode, 16) } : {}),
+    ...(acc.logoUrl ? { logoUrl: clampStr(acc.logoUrl, 500) } : {}),
     accountName: clampStr(acc.accountName, 120, 'Conta'),
     accountType: acc.accountType || 'checking',
     ...(typeof acc.openingBalanceCents === 'number' && Number.isSafeInteger(acc.openingBalanceCents)
@@ -310,6 +312,12 @@ function serializeTransactionDoc(
     ...(tx.externalId ? { externalId: clampStr(tx.externalId, 200) } : {}),
     ...(tx.salaryRecordId ? { salaryRecordId: clampStr(tx.salaryRecordId, 128) } : {}),
     ...(tx.transferId ? { transferId: clampStr(tx.transferId, 128) } : {}),
+    ...(tx.destinationAccountId
+      ? { destinationAccountId: clampStr(tx.destinationAccountId, 128) }
+      : {}),
+    ...(tx.crossEntityNature ? { crossEntityNature: clampStr(tx.crossEntityNature, 40) } : {}),
+    ...(tx.importBatchId ? { importBatchId: clampStr(tx.importBatchId, 128) } : {}),
+    ...(tx.notes ? { notes: clampStr(tx.notes, 500) } : {}),
     ...(tx.idempotencyKey ? { idempotencyKey: clampStr(tx.idempotencyKey, 160) } : {}),
     ...(tx.reversedTransactionId
       ? { reversedTransactionId: clampStr(tx.reversedTransactionId, 128) }
@@ -856,18 +864,23 @@ export async function reconcileCloudAndLocalOnLogin(params: {
   try {
     cloudResult = await fetchUserCloudDataset(uid);
   } catch (err) {
+    const rawMsg = err instanceof Error ? err.message : String(err);
+    const isOfflineErr =
+      rawMsg.toLowerCase().includes('client is offline') ||
+      rawMsg.toLowerCase().includes('unavailable');
+
     if (localHasData) {
       await enqueueCloudDatasetSync(
         uid,
         localDataset,
-        err instanceof Error ? err.message : 'Falha de leitura na nuvem'
+        isOfflineErr ? 'Dispositivo ou Firestore offline' : rawMsg
       );
     }
     return {
       outcome: 'QUEUED_OFFLINE',
       status: 'PENDING_OFFLINE',
       statusMessage: 'Existem alterações aguardando sincronização.',
-      error: err instanceof Error ? err.message : 'Falha ao consultar dados na nuvem.',
+      error: isOfflineErr ? undefined : rawMsg,
     };
   }
 

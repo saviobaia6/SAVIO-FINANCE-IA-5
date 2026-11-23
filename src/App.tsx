@@ -11,6 +11,7 @@ import {
   AuditLogEntry,
   CategoryBudget,
   CategoryRule,
+  CrossEntityTransferNature,
   LedgerDrilldownFilter,
 } from './types';
 import type { SalaryDataset } from './types/salary';
@@ -96,6 +97,8 @@ import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { TransactionModal } from './components/TransactionModal';
+import { CloudSheetModal } from './components/CloudSheetModal';
+import type { SheetTransactionRow } from './services/googleSheetsSyncService';
 import { DashboardView } from './components/DashboardView';
 import { CpfView } from './components/CpfView';
 import { CnpjView } from './components/CnpjView';
@@ -257,6 +260,14 @@ export default function App() {
   const [selectedCardIdForAnalytics, setSelectedCardIdForAnalytics] = useState<string | null>(null);
   const [feedbackBanner, setFeedbackBanner] = useState<string | null>(null);
   const [storageWarning, setStorageWarning] = useState<string | null>(null);
+  const [isCloudSheetModalOpen, setIsCloudSheetModalOpen] = useState(false);
+  const [linkedSpreadsheetId, setLinkedSpreadsheetId] = useState<string>(() => {
+    try {
+      return localStorage.getItem('finance_ia_linked_spreadsheet_id') || '';
+    } catch {
+      return '';
+    }
+  });
   const [authReady, setAuthReady] = useState(false);
   const [currentUser, setCurrentUser] = useState<AuthUserSummary | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('IDLE');
@@ -920,14 +931,18 @@ export default function App() {
       const info = await getLastSyncInfo(user.uid);
       setLastSyncedAt(info.lastSyncedAt);
 
+      let isFirestoreOnline = online;
       if (online) {
-        await testFirestoreConnection();
+        const conn = await testFirestoreConnection();
+        if (conn.offline) {
+          isFirestoreOnline = false;
+        }
       }
 
       const res = await reconcileCloudAndLocalOnLogin({
         user,
         localDataset: latestDatasetRef.current,
-        isOnline: online,
+        isOnline: isFirestoreOnline,
       });
 
       setSyncStatus(res.status);
@@ -947,8 +962,15 @@ export default function App() {
         cloudHydratedForUidRef.current = user.uid;
       } else if (res.outcome === 'CONFLICT' && res.conflict) {
         setSyncConflict(res.conflict);
-      } else if (res.error) {
-        setStorageWarning(res.error);
+      } else if (res.error && res.status !== 'PENDING_OFFLINE') {
+        let cleanErr = res.error;
+        try {
+          const parsed = JSON.parse(res.error) as { error?: string };
+          if (parsed.error) cleanErr = parsed.error;
+        } catch {
+          // not JSON
+        }
+        setStorageWarning(cleanErr);
       }
 
       const pending = await getPendingCloudSyncCount(user.uid);
@@ -1082,6 +1104,75 @@ export default function App() {
       setTransactions((prev) =>
         prev.map((t) => (t.id === editId ? { ...normalizedTxData, id: editId } : t))
       );
+
+      if (prevTx) {
+        const wasConfirmedCardCharge =
+          prevTx.status === 'CONFIRMED' &&
+          Boolean(prevTx.creditCardId) &&
+          !isCardBillPaymentTransaction(prevTx);
+        const isNowConfirmedCardCharge =
+          normalizedTxData.status === 'CONFIRMED' &&
+          Boolean(normalizedTxData.creditCardId) &&
+          !isCardBillPaymentTransaction(normalizedTxData);
+
+        if (wasConfirmedCardCharge || isNowConfirmedCardCharge) {
+          const prevSignedCents = wasConfirmedCardCharge
+            ? prevTx.direction === 'INCOME'
+              ? -(getTransactionAmountCents(prevTx) as number)
+              : (getTransactionAmountCents(prevTx) as number)
+            : 0;
+          const nextSignedCents = isNowConfirmedCardCharge
+            ? normalizedTxData.direction === 'INCOME'
+              ? -(amountCents as number)
+              : (amountCents as number)
+            : 0;
+
+          setCreditCards((prev) =>
+            prev.map((c) => {
+              let delta = 0;
+              if (wasConfirmedCardCharge && c.id === prevTx.creditCardId) delta -= prevSignedCents;
+              if (isNowConfirmedCardCharge && c.id === normalizedTxData.creditCardId) {
+                delta += nextSignedCents;
+              }
+              if (delta === 0) return c;
+              const nextCents = Math.max(0, (toCents(c.currentInvoiceAmount) as number) + delta);
+              return {
+                ...c,
+                currentInvoiceAmount: fromCents(cents(nextCents)),
+                status: nextCents === 0 ? 'PAID' : 'OPEN',
+              };
+            })
+          );
+        }
+
+        const auditEntry: AuditLogEntry = {
+          id: generateEntityId('aud'),
+          action: 'TRANSACTION_EDITED',
+          entityType: 'TRANSACTION',
+          entityId: editId,
+          actor: currentUser?.displayName || currentUser?.email || 'Usuário',
+          timestamp: new Date().toISOString(),
+          reason: `Movimentação editada: "${normalizedTxData.description}"`,
+          amountCents,
+          previousState: {
+            description: prevTx.description,
+            amountCents: getTransactionAmountCents(prevTx),
+            date: prevTx.date,
+            category: prevTx.category,
+            accountId: prevTx.accountId,
+            status: prevTx.status,
+          },
+          nextState: {
+            description: normalizedTxData.description,
+            amountCents,
+            date: normalizedTxData.date,
+            category: normalizedTxData.category,
+            accountId: normalizedTxData.accountId,
+            status: normalizedTxData.status,
+          },
+        };
+        setAuditLogs(appendAuditLog(auditEntry));
+      }
 
       const linkedSalaryId = normalizedTxData.salaryRecordId || prevTx?.salaryRecordId;
       if (linkedSalaryId) {
@@ -1384,6 +1475,143 @@ export default function App() {
       setFeedbackBanner(parts.join(' · ') + '.');
       setTimeout(() => setFeedbackBanner(null), 5000);
     }
+  };
+
+  const handleCommitSpreadsheetImport = (
+    items: Omit<Transaction, 'id'>[],
+    meta: { fileName: string; batchFingerprint: string; accountId: string }
+  ): { acceptedCount: number; skippedDuplicatesCount: number } => {
+    const withBatch = items.map((item) => ({
+      ...item,
+      importBatchId: item.importBatchId || meta.batchFingerprint,
+    }));
+    const { accepted, reconciledTransactions, skippedDuplicatesCount } = reconcileImportBatch(
+      withBatch,
+      transactions
+    );
+
+    const reconciledMap = new Map(reconciledTransactions.map((t) => [t.id, t]));
+    const nextTransactions =
+      accepted.length > 0 || reconciledTransactions.length > 0
+        ? [
+            ...accepted,
+            ...transactions.map((t) => reconciledMap.get(t.id) ?? t),
+          ]
+        : transactions;
+
+    let nextAuditLogs = auditLogs;
+    if (accepted.length > 0 || reconciledTransactions.length > 0) {
+      const totalCents = accepted.reduce(
+        (sum, tx) => addMoney(sum, getTransactionAmountCents(tx)),
+        cents(0)
+      );
+      const auditEntry: AuditLogEntry = {
+        id: generateEntityId('aud'),
+        action: 'SPREADSHEET_IMPORTED',
+        entityType: 'TRANSACTION',
+        entityId: meta.accountId,
+        actor: currentUser?.displayName || currentUser?.email || 'Usuário',
+        timestamp: new Date().toISOString(),
+        reason: `Planilha "${meta.fileName}" importada: ${accepted.length} novo(s), ${reconciledTransactions.length} conciliado(s), ${skippedDuplicatesCount} duplicata(s) ignorada(s).`,
+        amountCents: totalCents,
+        previousState: {
+          accountId: meta.accountId,
+          transactionCountBefore: transactions.length,
+        },
+        nextState: {
+          fileName: meta.fileName,
+          batchFingerprint: meta.batchFingerprint,
+          accountId: meta.accountId,
+          acceptedCount: accepted.length,
+          reconciledCount: reconciledTransactions.length,
+          skippedDuplicatesCount,
+        },
+      };
+      nextAuditLogs = appendAuditLog(auditEntry);
+      setTransactions(nextTransactions);
+      setAuditLogs(nextAuditLogs);
+      void commitAtomicMutationBatch({
+        transactions: nextTransactions,
+        auditLogs: nextAuditLogs,
+      });
+    }
+
+    const parts: string[] = [];
+    if (accepted.length > 0) parts.push(`${accepted.length} lançamento(s) importado(s)`);
+    if (reconciledTransactions.length > 0) {
+      parts.push(`${reconciledTransactions.length} agendamento(s) conciliado(s)`);
+    }
+    if (skippedDuplicatesCount > 0) {
+      parts.push(`${skippedDuplicatesCount} duplicata(s) protegida(s)`);
+    }
+    if (parts.length > 0) {
+      setFeedbackBanner(parts.join(' · ') + '.');
+      setTimeout(() => setFeedbackBanner(null), 5000);
+    }
+
+    return {
+      acceptedCount: accepted.length + reconciledTransactions.length,
+      skippedDuplicatesCount,
+    };
+  };
+
+  const currentSheetRows: SheetTransactionRow[] = useMemo(() => {
+    return transactions.map((t) => ({
+      id: t.id,
+      date: t.date,
+      description: t.description,
+      category: t.category,
+      amount: t.direction === 'EXPENSE' ? t.amount : -t.amount,
+      creditCardId: t.creditCardId || '',
+      accountId: t.accountId || '',
+      status: t.status === 'CONFIRMED' ? 'paid' : t.status === 'PENDING' ? 'pending' : 'scheduled',
+      updatedAt: t.purchaseDate || t.date || new Date().toISOString(),
+    }));
+  }, [transactions]);
+
+  const handleSyncTransactionsFromCloudSheet = async (rows: SheetTransactionRow[]) => {
+    if (!rows || rows.length === 0) return;
+    const defaultAccount = accounts[0];
+    const defaultCard = creditCards[0];
+
+    const mappedItems: Omit<Transaction, 'id'>[] = rows.map((r) => {
+      const isCard = Boolean(r.creditCardId || (!r.accountId && defaultCard));
+      const targetCard = r.creditCardId ? creditCards.find((c) => c.id === r.creditCardId) : defaultCard;
+      const targetAcc = r.accountId ? accounts.find((a) => a.id === r.accountId) : defaultAccount;
+      const entityId = targetCard?.entityId || targetAcc?.entityId || 'CPF';
+
+      const amountCents = toCents(Math.abs(r.amount));
+      const direction: Direction =
+        r.amount < 0 || r.description.toLowerCase().includes('estorno')
+          ? 'INCOME'
+          : 'EXPENSE';
+
+      return {
+        entityId,
+        accountId: isCard ? (targetCard?.linkedAccountId || '') : (targetAcc?.id || 'acc-default'),
+        creditCardId: isCard ? targetCard?.id : undefined,
+        account: isCard ? (targetCard?.cardName || 'Cartão') : (targetAcc?.institutionName || 'Conta Corrente'),
+        date: r.date,
+        description: r.description,
+        category: r.category || 'Outros',
+        amount: Math.abs(r.amount),
+        amountCents,
+        direction,
+        status: (r.status === 'pending' ? 'PENDING' : r.status === 'scheduled' ? 'PLANNED' : 'CONFIRMED') as TransactionStatus,
+        origin: 'IMPORT',
+        externalId: r.id,
+      };
+    });
+
+    const res = handleCommitSpreadsheetImport(mappedItems, {
+      fileName: 'Google Sheets (Nuvem)',
+      batchFingerprint: `gsheet-cloud-${todayLocal()}`,
+      accountId: defaultAccount?.id || 'cloud-sheet',
+    });
+
+    setStorageWarning(
+      `Sincronização concluída: ${res.acceptedCount} novo(s) lançamento(s) importado(s) e ${res.skippedDuplicatesCount} duplicado(s) ignorado(s).`
+    );
   };
 
   const handleAddCategoryRule = (rule: Omit<CategoryRule, 'id' | 'createdAt'>) => {
@@ -1691,6 +1919,8 @@ export default function App() {
     amountCents: MoneyCents;
     date: string;
     description: string;
+    notes?: string;
+    crossEntityNature?: CrossEntityTransferNature;
   }): { ok: boolean; error?: string } => {
     try {
       const res = executeInternalTransfer({
@@ -1728,6 +1958,79 @@ export default function App() {
   const handleAddCard = (cardData: Omit<CreditCard, 'id'>) => {
     const newCard: CreditCard = { ...cardData, id: generateEntityId('card') };
     setCreditCards((prev) => [...prev, newCard]);
+  };
+
+  const handleUpdateCard = (
+    cardId: string,
+    updates: Partial<Omit<CreditCard, 'id'>>
+  ) => {
+    const prevCard = creditCards.find((c) => c.id === cardId);
+    if (!prevCard) return;
+    const nextCards = creditCards.map((c) =>
+      c.id === cardId ? { ...c, ...updates } : c
+    );
+    const auditEntry: AuditLogEntry = {
+      id: generateEntityId('aud'),
+      action: 'CARD_UPDATED',
+      entityType: 'TRANSACTION',
+      entityId: cardId,
+      actor: currentUser?.displayName || currentUser?.email || 'Usuário',
+      timestamp: new Date().toISOString(),
+      reason: `Configurações e ciclo do cartão "${prevCard.cardName}" atualizados.`,
+      amountCents: cents(0),
+      previousState: {
+        cardName: prevCard.cardName,
+        closingDay: prevCard.closingDay,
+        dueDay: prevCard.dueDay,
+        limit: prevCard.limit,
+      },
+      nextState: {
+        cardName: updates.cardName ?? prevCard.cardName,
+        closingDay: updates.closingDay ?? prevCard.closingDay,
+        dueDay: updates.dueDay ?? prevCard.dueDay,
+        limit: updates.limit ?? prevCard.limit,
+      },
+    };
+    const nextAudit = appendAuditLog(auditEntry);
+    setCreditCards(nextCards);
+    setAuditLogs(nextAudit);
+    void commitAtomicMutationBatch({ creditCards: nextCards, auditLogs: nextAudit });
+    setFeedbackBanner(`Cartão "${updates.cardName || prevCard.cardName}" atualizado.`);
+    setTimeout(() => setFeedbackBanner(null), 4000);
+  };
+
+  const handleCommitCardImport = (
+    items: Omit<Transaction, 'id'>[],
+    meta: { fileName: string; batchFingerprint: string; cardId: string }
+  ): { acceptedCount: number; skippedDuplicatesCount: number } => {
+    const res = handleCommitSpreadsheetImport(items, {
+      fileName: meta.fileName,
+      batchFingerprint: meta.batchFingerprint,
+      accountId: meta.cardId,
+    });
+    if (res.acceptedCount > 0) {
+      let deltaCents = 0;
+      for (const item of items) {
+        if (item.status === 'CONFIRMED' && !isCardBillPaymentTransaction(item)) {
+          const amt = getTransactionAmountCents(item) as number;
+          deltaCents += item.direction === 'INCOME' ? -amt : amt;
+        }
+      }
+      if (deltaCents !== 0) {
+        setCreditCards((prev) =>
+          prev.map((c) => {
+            if (c.id !== meta.cardId) return c;
+            const nextCents = Math.max(0, (toCents(c.currentInvoiceAmount) as number) + deltaCents);
+            return {
+              ...c,
+              currentInvoiceAmount: fromCents(cents(nextCents)),
+              status: nextCents === 0 ? 'PAID' : 'OPEN',
+            };
+          })
+        );
+      }
+    }
+    return res;
   };
 
   const handlePayCardInvoice = (cardId: string, accountId?: string, paidAmount?: number) => {
@@ -2594,6 +2897,7 @@ export default function App() {
             syncStatus={syncStatus}
             pendingSyncCount={pendingSyncCount}
             onOpenShare={() => setShareSheetOpen(true)}
+            onOpenCloudSheet={() => setIsCloudSheetModalOpen(true)}
             hideValues={hideValues}
             onToggleHideValues={toggleHideValues}
           />
@@ -2649,6 +2953,7 @@ export default function App() {
           {currentTab === 'cpf' && (
             <CpfView
               transactions={transactions}
+              accounts={derivedAccounts}
               period={period}
               drilldownFilter={drilldownFilter}
               onClearDrilldownFilter={() => setDrilldownFilter(null)}
@@ -2663,6 +2968,7 @@ export default function App() {
           {currentTab === 'cnpj' && (
             <CnpjView
               transactions={transactions}
+              accounts={derivedAccounts}
               boletos={boletos}
               period={period}
               drilldownFilter={drilldownFilter}
@@ -2694,6 +3000,7 @@ export default function App() {
               accounts={derivedAccounts}
               transactions={transactions}
               boletos={boletos}
+              categoryRules={categoryRules}
               selectedAccountId={selectedAccountIdForAnalytics}
               onClearSelectedAccount={() => setSelectedAccountIdForAnalytics(null)}
               onAddAccount={handleAddAccount}
@@ -2706,6 +3013,10 @@ export default function App() {
                 })
               }
               onEditTransaction={openEditModal}
+              onSaveTransaction={handleSaveTransaction}
+              onDeleteTransaction={handleDeleteTransaction}
+              onRestoreTransaction={handleRestoreTransaction}
+              onCommitSpreadsheetImport={handleCommitSpreadsheetImport}
               onExecuteTransfer={handleInternalTransfer}
             />
           )}
@@ -2715,12 +3026,18 @@ export default function App() {
               cards={creditCards}
               accounts={derivedAccounts}
               transactions={transactions}
+              categoryRules={categoryRules}
               selectedCardId={selectedCardIdForAnalytics}
               onClearSelectedCard={() => setSelectedCardIdForAnalytics(null)}
               onAddCard={handleAddCard}
+              onUpdateCard={handleUpdateCard}
               onPayCardInvoice={handlePayCardInvoice}
               onUpdateCardInvoice={handleUpdateCardInvoice}
               onDeleteCard={handleDeleteCard}
+              onSaveTransaction={handleSaveTransaction}
+              onSaveTransactionBatch={handleSaveTransactionBatch}
+              onDeleteTransaction={handleDeleteTransaction}
+              onCommitCardImport={handleCommitCardImport}
               onEditTransaction={openEditModal}
               onRegisterPurchase={(card) => {
                 setEditingTransaction(null);
@@ -2815,6 +3132,8 @@ export default function App() {
               onAddCategoryRule={handleAddCategoryRule}
               onDeleteCategoryRule={handleDeleteCategoryRule}
               onUpdateConsolidationPrefs={setConsolidationPrefs}
+              onCommitSpreadsheetImport={handleCommitSpreadsheetImport}
+              onCommitCardImport={handleCommitCardImport}
               onNavigateModule={handleNavigate}
             />
           )}
@@ -3069,6 +3388,20 @@ export default function App() {
           </form>
         )}
       </Sheet>
+
+      <CloudSheetModal
+        isOpen={isCloudSheetModalOpen}
+        onClose={() => setIsCloudSheetModalOpen(false)}
+        spreadsheetId={linkedSpreadsheetId}
+        onSaveSpreadsheetId={(id) => {
+          setLinkedSpreadsheetId(id);
+          try {
+            localStorage.setItem('finance_ia_linked_spreadsheet_id', id);
+          } catch {}
+        }}
+        currentTransactions={currentSheetRows}
+        onSyncTransactions={handleSyncTransactionsFromCloudSheet}
+      />
 
       <ConfirmDeleteSheet
         open={Boolean(pendingDeleteConfirm)}

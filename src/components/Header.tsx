@@ -28,6 +28,7 @@ import {
   Building2,
   ChevronRight,
   SlidersHorizontal,
+  FileSpreadsheet,
 } from 'lucide-react';
 import type { SyncStatus } from '../services/cloudSyncService';
 import { usePrivacy } from '../contexts/PrivacyContext';
@@ -49,6 +50,7 @@ interface HeaderProps {
   syncStatus?: SyncStatus;
   pendingSyncCount?: number;
   onOpenShare?: () => void;
+  onOpenCloudSheet?: () => void;
   hideValues?: boolean;
   onToggleHideValues?: () => void;
 }
@@ -69,6 +71,7 @@ export const Header: React.FC<HeaderProps> = ({
   syncStatus = 'IDLE',
   pendingSyncCount = 0,
   onOpenShare,
+  onOpenCloudSheet,
   hideValues: propHideValues,
   onToggleHideValues: propToggleHideValues,
 }) => {
@@ -322,7 +325,31 @@ export const Header: React.FC<HeaderProps> = ({
                   <Share2 size={17} strokeWidth={1.75} />
                 </button>
               )}
+
+              {onOpenCloudSheet && (
+                <button
+                  type="button"
+                  onClick={onOpenCloudSheet}
+                  aria-label="Planilha Google na Nuvem & Backup Drive"
+                  title="Planilha Google na Nuvem & Backup Drive"
+                  className="hidden md:grid min-w-9 min-h-9 place-items-center rounded-full hover:bg-emerald-50 dark:hover:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 transition-colors cursor-pointer"
+                >
+                  <FileSpreadsheet size={17} strokeWidth={1.75} />
+                </button>
+              )}
             </div>
+
+            {onOpenCloudSheet && (
+              <button
+                type="button"
+                onClick={onOpenCloudSheet}
+                aria-label="Planilha Google na Nuvem"
+                title="Planilha Google na Nuvem"
+                className="md:hidden min-w-9 min-h-10 sm:min-w-9 sm:min-h-9 grid place-items-center rounded-full hover:bg-emerald-50 dark:hover:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 transition-colors cursor-pointer shrink-0"
+              >
+                <FileSpreadsheet size={17} strokeWidth={1.75} />
+              </button>
+            )}
 
             {/* Single Global Privacy Control (Mobile, Tablet & Desktop) */}
             <button

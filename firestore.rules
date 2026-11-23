@@ -79,20 +79,34 @@ service cloud.firestore {
         && isBoundedStr(data.updatedAt, 10, 64);
     }
 
+    function isValidLinkedGoogleSheet(data) {
+      return !('linkedGoogleSheet' in data) || (
+        data.linkedGoogleSheet is map
+        && data.linkedGoogleSheet.keys().hasAll(['spreadsheetId', 'sheetTabName'])
+        && isBoundedStr(data.linkedGoogleSheet.spreadsheetId, 1, 128)
+        && isBoundedStr(data.linkedGoogleSheet.sheetTabName, 1, 128)
+        && isOptionalBoundedStr(data.linkedGoogleSheet, 'spreadsheetName', 256)
+        && isOptionalBoundedStr(data.linkedGoogleSheet, 'lastSyncedAt', 64)
+        && (!('autoSyncOnLoad' in data.linkedGoogleSheet) || data.linkedGoogleSheet.autoSyncOnLoad is bool)
+      );
+    }
+
     function isValidAccount(data, uid, accountId) {
       return data.keys().hasAll([
           'id', 'ownerUid', 'entityId', 'institutionName', 'accountName',
           'accountType', 'balance', 'openingBalance', 'createdAt', 'updatedAt'
         ])
         && data.keys().hasOnly([
-          'id', 'ownerUid', 'entityId', 'institutionName', 'accountName',
+          'id', 'ownerUid', 'entityId', 'institutionName', 'bankCode', 'logoUrl', 'accountName',
           'accountType', 'openingBalanceCents', 'balanceCents',
           'projectedBalanceCents', 'projectedBalance', 'balance',
-          'openingBalance', 'archived', 'revision', 'createdAt', 'updatedAt'
+          'openingBalance', 'archived', 'linkedGoogleSheet', 'revision', 'createdAt', 'updatedAt'
         ])
         && hasValidBaseEntity(data, uid, accountId)
         && isEntityScopePair(data.entityId)
         && isBoundedStr(data.institutionName, 1, 120)
+        && isOptionalBoundedStr(data, 'bankCode', 16)
+        && isOptionalBoundedStr(data, 'logoUrl', 500)
         && isBoundedStr(data.accountName, 1, 120)
         && data.accountType in ['checking', 'savings', 'business', 'investment']
         && isFiniteNumberRange(data.balance, -1000000000, 1000000000)
@@ -101,12 +115,13 @@ service cloud.firestore {
         && (!('balanceCents' in data) || isFiniteNumberRange(data.balanceCents, -100000000000, 100000000000))
         && (!('projectedBalanceCents' in data) || isFiniteNumberRange(data.projectedBalanceCents, -100000000000, 100000000000))
         && (!('projectedBalance' in data) || isFiniteNumberRange(data.projectedBalance, -1000000000, 1000000000))
-        && (!('archived' in data) || data.archived is bool);
+        && (!('archived' in data) || data.archived is bool)
+        && isValidLinkedGoogleSheet(data);
     }
 
     function isValidTransaction(data, uid, txId) {
       return data.keys().hasAll([
-          'id', 'ownerUid', 'entityId', 'accountId', 'date', 'description',
+          'id', 'ownerUid', 'entityId', 'date', 'description',
           'category', 'account', 'amount', 'direction', 'status', 'origin',
           'createdAt', 'updatedAt'
         ])
@@ -120,20 +135,26 @@ service cloud.firestore {
           'operationType', 'counterparty', 'externalId', 'salaryRecordId',
           'transferId', 'idempotencyKey', 'reversedTransactionId',
           'reversalTransactionId', 'cancelledAt', 'cancellationReason',
+          'purchaseDate', 'postingDate', 'billingCycleYm', 'billingClosingDate',
+          'billingDueDate', 'cardEntryKind', 'installmentGroupId',
           'revision', 'createdAt', 'updatedAt'
         ])
         && hasValidBaseEntity(data, uid, txId)
         && isEntityScopePair(data.entityId)
-        && isBoundedStr(data.accountId, 1, 128)
+        && (
+          ('accountId' in data && isBoundedStr(data.accountId, 1, 128)) ||
+          ('creditCardId' in data && isBoundedStr(data.creditCardId, 1, 128))
+        )
         && isBoundedStr(data.date, 8, 32)
         && isBoundedStr(data.description, 1, 300)
         && isOptionalBoundedStr(data, 'originalDescription', 300)
         && isBoundedStr(data.category, 1, 120)
         && isBoundedStr(data.account, 0, 200)
-        && isFiniteNumberRange(data.amount, 0, 1000000000)
-        && (!('amountCents' in data) || isFiniteNumberRange(data.amountCents, 0, 100000000000))
-        && data.direction in ['INCOME', 'EXPENSE']
-        && data.status in ['PLANNED', 'PENDING', 'CONFIRMED', 'CANCELLED']
+        && (data.amount is int || data.amount is float)
+        && isFiniteNumberRange(data.amount, -1000000000, 1000000000)
+        && (!('amountCents' in data) || isFiniteNumberRange(data.amountCents, -100000000000, 100000000000))
+        && data.direction in ['INCOME', 'EXPENSE', 'in', 'out']
+        && data.status in ['PLANNED', 'PENDING', 'CONFIRMED', 'CANCELLED', 'paid', 'pending', 'scheduled']
         && data.origin in ['MANUAL', 'IMPORT', 'OPEN_FINANCE', 'BOLETO', 'BANK_NOTIFICATION']
         && (!('isInternalTransfer' in data) || data.isInternalTransfer is bool)
         && (!('isCardBillPayment' in data) || data.isCardBillPayment is bool)
@@ -154,7 +175,14 @@ service cloud.firestore {
         && isOptionalBoundedStr(data, 'reversedTransactionId', 128)
         && isOptionalBoundedStr(data, 'reversalTransactionId', 128)
         && isOptionalBoundedStr(data, 'cancelledAt', 64)
-        && isOptionalBoundedStr(data, 'cancellationReason', 300);
+        && isOptionalBoundedStr(data, 'cancellationReason', 300)
+        && isOptionalBoundedStr(data, 'purchaseDate', 32)
+        && isOptionalBoundedStr(data, 'postingDate', 32)
+        && isOptionalBoundedStr(data, 'billingCycleYm', 16)
+        && isOptionalBoundedStr(data, 'billingClosingDate', 32)
+        && isOptionalBoundedStr(data, 'billingDueDate', 32)
+        && isOptionalBoundedStr(data, 'cardEntryKind', 32)
+        && isOptionalBoundedStr(data, 'installmentGroupId', 128);
     }
 
     function isValidCreditCard(data, uid, cardId) {
@@ -164,20 +192,24 @@ service cloud.firestore {
           'status', 'createdAt', 'updatedAt'
         ])
         && data.keys().hasOnly([
-          'id', 'ownerUid', 'entityId', 'institutionName', 'cardName',
-          'last4', 'limit', 'closingDay', 'dueDay', 'currentInvoiceAmount',
-          'status', 'revision', 'createdAt', 'updatedAt'
+          'id', 'ownerUid', 'entityId', 'institutionName', 'bankCode', 'logoUrl', 'linkedAccountId',
+          'cardName', 'last4', 'limit', 'closingDay', 'dueDay', 'currentInvoiceAmount',
+          'status', 'linkedGoogleSheet', 'revision', 'createdAt', 'updatedAt'
         ])
         && hasValidBaseEntity(data, uid, cardId)
         && isEntityScopePair(data.entityId)
         && isBoundedStr(data.institutionName, 1, 120)
+        && isOptionalBoundedStr(data, 'bankCode', 16)
+        && isOptionalBoundedStr(data, 'logoUrl', 500)
+        && isOptionalBoundedStr(data, 'linkedAccountId', 128)
         && isBoundedStr(data.cardName, 1, 120)
         && isBoundedStr(data.last4, 1, 8)
         && isFiniteNumberRange(data.limit, 0, 100000000)
         && isFiniteNumberRange(data.closingDay, 1, 31)
         && isFiniteNumberRange(data.dueDay, 1, 31)
         && isFiniteNumberRange(data.currentInvoiceAmount, 0, 100000000)
-        && data.status in ['OPEN', 'CLOSED', 'PAID'];
+        && data.status in ['OPEN', 'CLOSED', 'PAID']
+        && isValidLinkedGoogleSheet(data);
     }
 
     function isValidBoleto(data, uid, boletoId) {
@@ -256,20 +288,22 @@ service cloud.firestore {
 
     function isValidDocumentMeta(data, uid, docId) {
       return data.keys().hasAll([
-          'id', 'ownerUid', 'name', 'type', 'date', 'size', 'status',
-          'createdAt', 'updatedAt'
+          'id', 'ownerUid', 'type', 'createdAt'
         ])
         && data.keys().hasOnly([
-          'id', 'ownerUid', 'name', 'type', 'date', 'size', 'status',
+          'id', 'ownerUid', 'name', 'title', 'type', 'date', 'size', 'status',
           'hasBlob', 'fileId', 'mimeType', 'textContent',
           'extractedTransactionsCount', 'revision', 'createdAt', 'updatedAt'
         ])
         && hasValidBaseEntity(data, uid, docId)
-        && isBoundedStr(data.name, 1, 200)
-        && data.type in ['PDF', 'EPUB', 'Imagem']
-        && isBoundedStr(data.date, 8, 32)
-        && isBoundedStr(data.size, 1, 40)
-        && data.status in ['PENDING', 'PROCESSED']
+        && (
+          ('name' in data && isBoundedStr(data.name, 1, 200)) ||
+          ('title' in data && isBoundedStr(data.title, 1, 200))
+        )
+        && data.type in ['PDF', 'EPUB', 'Imagem', 'CSV', 'XLSX', 'OFX']
+        && isOptionalBoundedStr(data, 'date', 32)
+        && isOptionalBoundedStr(data, 'size', 40)
+        && (!('status' in data) || data.status in ['PENDING', 'PROCESSED'])
         && (!('hasBlob' in data) || data.hasBlob is bool)
         && isOptionalBoundedStr(data, 'fileId', 160)
         && isOptionalBoundedStr(data, 'mimeType', 120)

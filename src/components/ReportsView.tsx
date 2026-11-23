@@ -173,17 +173,36 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   }, [transactions, period]);
 
   const handleExportCsv = () => {
-    const header = ['Data', 'Vínculo', 'Descrição', 'Categoria', 'Conta', 'Natureza', 'Valor', 'Status'];
-    const rows = periodTrs.map((t) => [
-      sanitizeCellForSheet(t.date),
-      sanitizeCellForSheet(t.entityId),
-      sanitizeCellForSheet(t.description),
-      sanitizeCellForSheet(t.category),
-      sanitizeCellForSheet(t.account),
-      sanitizeCellForSheet(t.direction === 'INCOME' ? 'Receita' : 'Despesa'),
-      fromCents(getTransactionAmountCents(t)).toFixed(2).replace('.', ','),
-      sanitizeCellForSheet(t.status),
-    ]);
+    const accountById = new Map(accounts.map((a) => [a.id, a]));
+    const header = [
+      'Data',
+      'Vínculo',
+      'Descrição',
+      'Categoria',
+      'Banco',
+      'Cód. Banco',
+      'Conta',
+      'Natureza',
+      'Valor',
+      'Status',
+      'Observações',
+    ];
+    const rows = periodTrs.map((t) => {
+      const acc = t.accountId ? accountById.get(t.accountId) : undefined;
+      return [
+        sanitizeCellForSheet(t.date),
+        sanitizeCellForSheet(t.entityId),
+        sanitizeCellForSheet(t.description),
+        sanitizeCellForSheet(t.category),
+        sanitizeCellForSheet(acc?.institutionName || t.account || ''),
+        sanitizeCellForSheet(acc?.bankCode || ''),
+        sanitizeCellForSheet(acc ? `${acc.institutionName} · ${acc.accountName}` : t.account),
+        sanitizeCellForSheet(t.direction === 'INCOME' ? 'Receita' : 'Despesa'),
+        fromCents(getTransactionAmountCents(t)).toFixed(2).replace('.', ','),
+        sanitizeCellForSheet(t.status),
+        sanitizeCellForSheet(t.notes || ''),
+      ];
+    });
 
     const csvContent =
       '\uFEFF' +

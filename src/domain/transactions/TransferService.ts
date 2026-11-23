@@ -1,4 +1,9 @@
-import { Account, AuditLogEntry, Transaction } from '../../types';
+import {
+  Account,
+  AuditLogEntry,
+  CrossEntityTransferNature,
+  Transaction,
+} from '../../types';
 import { generateEntityId, generateIdempotencyKey } from '../common/id';
 import { MoneyCents, fromCents } from '../money/money';
 import { todayLocal } from '../../utils/dateUtils';
@@ -9,6 +14,8 @@ export interface InternalTransferParams {
   amountCents: MoneyCents;
   date?: string;
   description?: string;
+  notes?: string;
+  crossEntityNature?: CrossEntityTransferNature;
   accounts: readonly Account[];
   existingTransactions: readonly Transaction[];
   actor?: string;
@@ -17,10 +24,28 @@ export interface InternalTransferParams {
 
 export interface InternalTransferResult {
   transferId: string;
+  isCrossEntity: boolean;
+  crossEntityNature: CrossEntityTransferNature;
   debitTransaction: Transaction;
   creditTransaction: Transaction;
   updatedTransactions: Transaction[];
   auditEntry: AuditLogEntry;
+}
+
+function getCrossEntityCategory(nature: CrossEntityTransferNature): string {
+  switch (nature) {
+    case 'APORTE_CAPITAL':
+      return 'Aporte de Capital';
+    case 'RETIRADA_SOCIO':
+      return 'Retirada / Pró-labore';
+    case 'DISTRIBUICAO_LUCROS':
+      return 'Distribuição de Lucros';
+    case 'EMPRESTIMO_SOCIO':
+      return 'Empréstimo Sócios';
+    case 'TRANSFERENCIA_NEUTRA':
+    default:
+      return 'Transferência';
+  }
 }
 
 export function executeInternalTransfer(
@@ -58,6 +83,12 @@ export function executeInternalTransfer(
     throw new Error('Não é possível transferir envolvendo contas arquivadas.');
   }
 
+  const isCrossEntity = origin.entityId !== destination.entityId;
+  const crossEntityNature: CrossEntityTransferNature =
+    isCrossEntity && params.crossEntityNature
+      ? params.crossEntityNature
+      : 'TRANSFERENCIA_NEUTRA';
+
   const idempotencyKey =
     params.idempotencyKey?.trim() ||
     generateIdempotencyKey(`xfer-${origin.id}-${destination.id}`);
@@ -81,24 +112,36 @@ export function executeInternalTransfer(
     `Transferência: ${origin.institutionName} → ${destination.institutionName}`;
   const exactAmount = fromCents(amountCents);
   const nowIso = new Date().toISOString();
+  const cleanNotes = params.notes?.trim() || undefined;
+
+  // Same-entity transfers OR cross-entity transfers marked TRANSFERENCIA_NEUTRA remain operationally neutral.
+  // Explicit PF<->PJ economic classifications (e.g. APORTE_CAPITAL, RETIRADA_SOCIO, DISTRIBUICAO_LUCROS)
+  // remain paired via transferId for traceability while surfacing in each entity's accounting view.
+  const treatAsNeutralInternal =
+    !isCrossEntity || crossEntityNature === 'TRANSFERENCIA_NEUTRA';
+  const resolvedCategory = getCrossEntityCategory(crossEntityNature);
+  const resolvedOpType = treatAsNeutralInternal ? 'TRANSFERENCIA_PROPRIA' : 'PIX';
 
   const debitTransaction: Transaction = {
     id: generateEntityId('tr-xfer-out'),
     entityId: origin.entityId,
     accountId: origin.id,
+    destinationAccountId: destination.id,
     date: transferDate,
     description: `${baseDesc} (Saída)`,
-    category: 'Transferência',
+    category: resolvedCategory,
     account: `${origin.institutionName} · ${origin.accountName}`,
     amountCents,
     amount: exactAmount,
     direction: 'EXPENSE',
     status: 'CONFIRMED',
     origin: 'MANUAL',
-    isInternalTransfer: true,
-    operationType: 'TRANSFERENCIA_PROPRIA',
+    isInternalTransfer: treatAsNeutralInternal,
+    operationType: resolvedOpType,
     counterparty: `${destination.institutionName} · ${destination.accountName}`,
     transferId,
+    ...(isCrossEntity ? { crossEntityNature } : {}),
+    ...(cleanNotes ? { notes: cleanNotes } : {}),
     idempotencyKey: `${idempotencyKey}-out`,
   };
 
@@ -106,19 +149,22 @@ export function executeInternalTransfer(
     id: generateEntityId('tr-xfer-in'),
     entityId: destination.entityId,
     accountId: destination.id,
+    destinationAccountId: origin.id,
     date: transferDate,
     description: `${baseDesc} (Entrada)`,
-    category: 'Transferência',
+    category: resolvedCategory,
     account: `${destination.institutionName} · ${destination.accountName}`,
     amountCents,
     amount: exactAmount,
     direction: 'INCOME',
     status: 'CONFIRMED',
     origin: 'MANUAL',
-    isInternalTransfer: true,
-    operationType: 'TRANSFERENCIA_PROPRIA',
+    isInternalTransfer: treatAsNeutralInternal,
+    operationType: resolvedOpType,
     counterparty: `${origin.institutionName} · ${origin.accountName}`,
     transferId,
+    ...(isCrossEntity ? { crossEntityNature } : {}),
+    ...(cleanNotes ? { notes: cleanNotes } : {}),
     idempotencyKey: `${idempotencyKey}-in`,
   };
 
@@ -137,6 +183,8 @@ export function executeInternalTransfer(
     previousState: {
       originAccountId: origin.id,
       destinationAccountId: destination.id,
+      originEntityId: origin.entityId,
+      destinationEntityId: destination.entityId,
     },
     nextState: {
       transferId,
@@ -144,11 +192,16 @@ export function executeInternalTransfer(
       creditTransactionId: creditTransaction.id,
       amountCents,
       date: transferDate,
+      isCrossEntity,
+      crossEntityNature,
+      treatAsNeutralInternal,
     },
   };
 
   return {
     transferId,
+    isCrossEntity,
+    crossEntityNature,
     debitTransaction,
     creditTransaction,
     updatedTransactions,

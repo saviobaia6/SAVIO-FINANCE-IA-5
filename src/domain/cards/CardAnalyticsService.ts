@@ -109,17 +109,27 @@ export function calculateCardAnalytics(
     }
   }
 
-  // Next month bill estimate from scheduled/pending/planned purchases dated in nextMonth
+  // Next month bill estimate from scheduled/pending/planned purchases & reversals in nextMonth
   let nextBillCents = 0;
-  for (const tx of allPurchases) {
-    if (tx.date.startsWith(nextMonth)) {
-      nextBillCents += getTransactionAmountCents(tx);
+  for (const tx of cardAllTx) {
+    if (isCardBillPaymentTransaction(tx) || tx.isInternalTransfer) continue;
+    const cycleKey = tx.billingCycleYm || tx.postingDate?.slice(0, 7) || tx.date.slice(0, 7);
+    if (cycleKey !== nextMonth) continue;
+    const amt = getTransactionAmountCents(tx);
+    if (tx.cardEntryKind === 'REVERSAL' || tx.direction === 'INCOME') {
+      nextBillCents -= amt;
+    } else {
+      nextBillCents += amt;
     }
   }
+  nextBillCents = Math.max(0, nextBillCents);
 
   // Future committed balance includes current open invoice + future pending/planned installments
   const futureInstallmentsCents = allPurchases
-    .filter((t) => t.date.slice(0, 7) > currentMonth && (t.status === 'PENDING' || t.status === 'PLANNED'))
+    .filter((t) => {
+      const cycleKey = t.billingCycleYm || t.date.slice(0, 7);
+      return cycleKey > currentMonth && (t.status === 'PENDING' || t.status === 'PLANNED');
+    })
     .reduce((sum, t) => sum + getTransactionAmountCents(t), 0);
 
   const currentBillCents = Math.max(0, toCents(card.currentInvoiceAmount));

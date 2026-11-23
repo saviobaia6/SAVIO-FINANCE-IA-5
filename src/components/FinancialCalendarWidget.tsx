@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Transaction, EntityScope } from '../types';
+import { Account, Transaction, EntityScope } from '../types';
 import {
   filterTransactionsByPeriod,
   fromCents,
@@ -9,9 +9,11 @@ import { formatDateBR, todayLocal } from '../utils/dateUtils';
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { usePrivacy } from '../contexts/PrivacyContext';
 import { formatarValor } from '../utils/formatters';
+import { BankLogo } from './BankLogo';
 
 interface FinancialCalendarWidgetProps {
   transactions: Transaction[];
+  accounts?: Account[];
   scope: EntityScope;
   period: string;
   onEditTransaction?: (tx: Transaction) => void;
@@ -39,11 +41,16 @@ const WEEKDAY_LABELS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 
 export const FinancialCalendarWidget: React.FC<FinancialCalendarWidgetProps> = ({
   transactions,
+  accounts = [],
   scope,
   period,
   onEditTransaction,
 }) => {
   const { hideValues } = usePrivacy();
+  const accountById = useMemo(
+    () => new Map(accounts.map((a) => [a.id, a])),
+    [accounts]
+  );
   const [activeTab, setActiveTab] = useState<WidgetTab>('agenda');
   const [agendaFilter, setAgendaFilter] = useState<AgendaFilter>('all');
 
@@ -198,13 +205,20 @@ export const FinancialCalendarWidget: React.FC<FinancialCalendarWidgetProps> = (
             const amt = fromCents(getTransactionAmountCents(tx));
             const isTransfer = Boolean(tx.isInternalTransfer);
             const isIncome = tx.direction === 'INCOME';
+            const acc = tx.accountId ? accountById.get(tx.accountId) : undefined;
             return (
               <button
                 key={tx.id}
                 type="button"
                 onClick={() => onEditTransaction?.(tx)}
-                className="w-full text-left px-3.5 py-2.5 flex items-center justify-between gap-3 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                className="w-full text-left px-3.5 py-2.5 flex items-center justify-between gap-2.5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer"
               >
+                <BankLogo
+                  bankName={acc?.institutionName || tx.account || 'Banco'}
+                  bankCode={acc?.bankCode}
+                  logoUrl={acc?.logoUrl}
+                  size={28}
+                />
                 <div className="min-w-0 flex-1">
                   <div className="text-xs sm:text-sm font-semibold text-[#0F172A] dark:text-white truncate">
                     {tx.description}
@@ -216,7 +230,9 @@ export const FinancialCalendarWidget: React.FC<FinancialCalendarWidgetProps> = (
                     {tx.account && (
                       <>
                         <span>·</span>
-                        <span className="truncate">{tx.account}</span>
+                        <span className="truncate">
+                          {acc ? `${acc.institutionName} · ${acc.accountName}` : tx.account}
+                        </span>
                       </>
                     )}
                   </div>
@@ -455,20 +471,34 @@ export const FinancialCalendarWidget: React.FC<FinancialCalendarWidgetProps> = (
                         ? 'Pagamento'
                         : 'Transferência';
 
+                    const acc = m.tx.accountId ? accountById.get(m.tx.accountId) : undefined;
                     return (
                       <button
                         key={m.tx.id}
                         type="button"
                         onClick={() => onEditTransaction?.(m.tx)}
-                        className="w-full text-left py-2.5 flex justify-between items-center gap-2 hover:bg-slate-50 dark:hover:bg-white/5 px-1 transition-colors cursor-pointer"
+                        className="w-full text-left py-2.5 flex justify-between items-center gap-2.5 hover:bg-slate-50 dark:hover:bg-white/5 px-1 transition-colors cursor-pointer"
                       >
+                        <BankLogo
+                          bankName={acc?.institutionName || m.tx.account || 'Banco'}
+                          bankCode={acc?.bankCode}
+                          logoUrl={acc?.logoUrl}
+                          size={28}
+                        />
                         <div className="space-y-0.5 min-w-0 flex-1">
                           <strong className="block text-[#0F172A] dark:text-white truncate">
                             {m.tx.description}
                           </strong>
-                          <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${badgeCls}`}>
-                            {labelName}
-                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${badgeCls}`}>
+                              {labelName}
+                            </span>
+                            {(acc || m.tx.account) && (
+                              <span className="text-[10px] text-[#64748B] dark:text-slate-400 truncate">
+                                {acc ? `${acc.institutionName} · ${acc.accountName}` : m.tx.account}
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
                           <strong

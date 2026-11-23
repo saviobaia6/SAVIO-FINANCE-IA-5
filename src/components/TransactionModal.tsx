@@ -26,6 +26,7 @@ import { formatDateBR, todayLocal } from '../utils/dateUtils';
 import { loadDraft, saveDraft, clearDraft } from '../core/lifecycle/draftPreserver';
 import { MoneyInputField } from './MoneyInputField';
 import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
+import { BankLogo } from './BankLogo';
 import { X, Check, AlertCircle, Repeat, CreditCard as CreditCardIcon, Wallet } from 'lucide-react';
 
 interface TransactionModalProps {
@@ -74,6 +75,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [occurrencesStr, setOccurrencesStr] = useState('3');
   const [amountMode, setAmountMode] = useState<InstallmentAmountMode>('PER_OCCURRENCE');
   const [futureStatus, setFutureStatus] = useState<'PENDING' | 'PLANNED'>('PENDING');
+  const [notes, setNotes] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [restoredDraftBanner, setRestoredDraftBanner] = useState(false);
 
@@ -129,6 +131,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setIncomeOrigin(editingTransaction.incomeOrigin || '');
       setIncomeSourceName(editingTransaction.incomeSourceName || '');
       setIsInternalTransfer(Boolean(editingTransaction.isInternalTransfer));
+      setNotes(editingTransaction.notes || '');
     } else {
       const selectableAccounts = accounts.filter((a) => !a.archived);
       const preferredAccount =
@@ -232,6 +235,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         setIsCardBillPayment(false);
         setIncomeOrigin('');
         setIncomeSourceName('');
+        setNotes('');
       }
     }
   }, [isOpen, defaultEntity, defaultCardId, defaultAccountId, editingTransaction, accounts, cards]);
@@ -370,6 +374,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       operationType: usingCard ? 'CARTAO' : operationType,
       counterparty: counterparty.trim() || undefined,
       externalId: externalId.trim() || undefined,
+      notes: notes.trim() || undefined,
       ...(direction === 'INCOME' && incomeOrigin ? { incomeOrigin } : {}),
       ...(direction === 'INCOME' && incomeSourceName.trim()
         ? { incomeSourceName: incomeSourceName.trim() }
@@ -712,24 +717,34 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   <label htmlFor="tx-account" className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
                     Conta vinculada
                   </label>
-                  <select
-                    id="tx-account"
-                    value={accountId}
-                    onChange={(e) => setAccountId(e.target.value)}
-                    className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-3 text-base font-medium text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800 outline-none focus:border-emerald-500 min-h-12"
-                  >
-                    {availableAccounts.length === 0 ? (
-                      <option value="" disabled>
-                        Nenhuma conta {entityId} disponível
-                      </option>
-                    ) : (
-                      availableAccounts.map((acc) => (
-                        <option key={acc.id} value={acc.id}>
-                          {acc.institutionName} ({acc.entityId}){acc.archived ? ' [Arquivada]' : ''}
-                        </option>
-                      ))
+                  <div className="flex items-center gap-2">
+                    {selectedAccountObj && (
+                      <BankLogo
+                        bankName={selectedAccountObj.institutionName}
+                        bankCode={selectedAccountObj.bankCode}
+                        logoUrl={selectedAccountObj.logoUrl}
+                        size={36}
+                      />
                     )}
-                  </select>
+                    <select
+                      id="tx-account"
+                      value={accountId}
+                      onChange={(e) => setAccountId(e.target.value)}
+                      className="flex-1 min-w-0 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-3 text-sm font-medium text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800 outline-none focus:border-emerald-500 min-h-12"
+                    >
+                      {availableAccounts.length === 0 ? (
+                        <option value="" disabled>
+                          Nenhuma conta {entityId} disponível
+                        </option>
+                      ) : (
+                        availableAccounts.map((acc) => (
+                          <option key={acc.id} value={acc.id}>
+                            {acc.institutionName} · {acc.accountName} ({acc.entityId}){acc.archived ? ' [Arquivada]' : ''}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
                   {availableAccounts.length === 0 && (
                     <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1">
                       Cadastre uma conta {entityId} em Contas Bancárias para associar este lançamento.
@@ -781,6 +796,20 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                   className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-mono text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800 outline-none focus:border-emerald-500 min-h-12"
                 />
               </div>
+            </div>
+
+            <div>
+              <label htmlFor="tx-notes" className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
+                Observações (opcional)
+              </label>
+              <textarea
+                id="tx-notes"
+                rows={2}
+                placeholder="Detalhes adicionais para Livro Caixa e conciliação..."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800 outline-none focus:border-emerald-500 resize-none"
+              />
             </div>
 
             <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 cursor-pointer">

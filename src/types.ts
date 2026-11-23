@@ -73,6 +73,21 @@ export type IncomeOriginKey =
   | 'extra'
   | 'other';
 
+export type CrossEntityTransferNature =
+  | 'TRANSFERENCIA_NEUTRA'
+  | 'APORTE_CAPITAL'
+  | 'RETIRADA_SOCIO'
+  | 'DISTRIBUICAO_LUCROS'
+  | 'EMPRESTIMO_SOCIO';
+
+export const CROSS_ENTITY_NATURE_LABELS: Record<CrossEntityTransferNature, string> = {
+  TRANSFERENCIA_NEUTRA: 'Transferência neutra (ajuste entre titularidades)',
+  APORTE_CAPITAL: 'Aporte de capital (PF → PJ)',
+  RETIRADA_SOCIO: 'Retirada / Pró-labore de sócio (PJ → PF)',
+  DISTRIBUICAO_LUCROS: 'Distribuição de lucros (PJ → PF)',
+  EMPRESTIMO_SOCIO: 'Empréstimo entre sócio e empresa',
+};
+
 export interface Transaction {
   id: string;
   entityId: 'CPF' | 'CNPJ';
@@ -103,11 +118,22 @@ export interface Transaction {
   externalId?: string;
   salaryRecordId?: string;
   transferId?: string;
+  destinationAccountId?: string;
+  crossEntityNature?: CrossEntityTransferNature;
+  importBatchId?: string;
+  notes?: string;
   idempotencyKey?: string;
   reversedTransactionId?: string;
   reversalTransactionId?: string;
   cancelledAt?: string;
   cancellationReason?: string;
+  purchaseDate?: string; // YYYY-MM-DD original purchase date
+  postingDate?: string; // YYYY-MM-DD invoice posting date
+  billingCycleYm?: string; // YYYY-MM invoice cycle month
+  billingClosingDate?: string; // YYYY-MM-DD cycle closing date
+  billingDueDate?: string; // YYYY-MM-DD cycle due date
+  cardEntryKind?: 'PURCHASE' | 'INSTALLMENT' | 'REVERSAL' | 'FEE' | 'PAYMENT';
+  installmentGroupId?: string; // shared ID linking installment series
 }
 
 export interface AuditLogEntry {
@@ -116,8 +142,13 @@ export interface AuditLogEntry {
     | 'TRANSACTION_REVERSED'
     | 'TRANSACTION_CANCELLED'
     | 'TRANSACTION_RESTORED'
+    | 'TRANSACTION_EDITED'
     | 'TRANSFER_EXECUTED'
-    | 'EXTRACTION_BATCH_INTEGRATED';
+    | 'EXTRACTION_BATCH_INTEGRATED'
+    | 'SPREADSHEET_IMPORTED'
+    | 'CARD_UPDATED'
+    | 'CARD_CYCLE_CLOSED'
+    | 'CARD_PAYMENT_RECORDED';
   entityType: 'TRANSACTION' | 'TRANSFER';
   entityId: string;
   relatedEntityId?: string;
@@ -139,10 +170,20 @@ export interface TransactionReversalRecord {
   amountCents: MoneyCents;
 }
 
+export interface LinkedGoogleSpreadsheetConfig {
+  spreadsheetId: string;
+  spreadsheetName?: string;
+  sheetTabName: string;
+  lastSyncedAt?: string;
+  autoSyncOnLoad?: boolean;
+}
+
 export interface Account {
   id: string;
   entityId: 'CPF' | 'CNPJ';
   institutionName: string;
+  bankCode?: string;
+  logoUrl?: string;
   accountName: string;
   accountType: 'checking' | 'savings' | 'business' | 'investment';
   openingBalanceCents?: MoneyCents;
@@ -152,12 +193,16 @@ export interface Account {
   balance: number;
   openingBalance: number;
   archived?: boolean;
+  linkedGoogleSheet?: LinkedGoogleSpreadsheetConfig;
 }
 
 export interface CreditCard {
   id: string;
   entityId: 'CPF' | 'CNPJ';
   institutionName: string;
+  bankCode?: string;
+  logoUrl?: string;
+  linkedAccountId?: string;
   cardName: string;
   last4: string;
   limit: number;
@@ -165,6 +210,7 @@ export interface CreditCard {
   dueDay: number;
   currentInvoiceAmount: number;
   status: 'OPEN' | 'CLOSED' | 'PAID';
+  linkedGoogleSheet?: LinkedGoogleSpreadsheetConfig;
 }
 
 export interface Boleto {

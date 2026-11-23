@@ -123,6 +123,23 @@ export const ExtractedBoletoSchema = z.object({
   entityId: z.enum(['CPF', 'CNPJ']).default('CPF'),
 });
 
+export const AuditCardInvoiceRequestSchema = z
+  .object({
+    fileName: z.string().max(255).optional(),
+    textContent: z.string().max(60000).optional(),
+    fileData: z
+      .object({
+        mimeType: z.string().regex(
+          /^(application\/pdf|image\/(png|jpeg|jpg|webp)|text\/(csv|plain)|application\/vnd\.ms-excel)$/
+        ),
+        base64: z.string().min(8).max(MAX_BASE64_LENGTH),
+      })
+      .optional(),
+  })
+  .refine((data) => Boolean(data.textContent?.trim() || data.fileData), {
+    message: 'Envie um arquivo PDF, imagem (PNG/JPG/WEBP) ou CSV válido para auditoria da fatura.',
+  });
+
 export function isOriginAllowedForAi(params: {
   origin?: string;
   referer?: string;

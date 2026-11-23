@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Transaction, Boleto } from '../types';
+import type { Account, Transaction, Boleto } from '../types';
 import { FullBackupPayload } from '../utils/backup';
 import {
   signInWithGoogleWorkspace,
@@ -8,17 +8,19 @@ import {
   syncBoletoToCalendar,
   backupToGoogleDrive,
 } from '../services/googleWorkspace';
-import { FileSpreadsheet, Calendar, HardDrive, CheckCircle2, AlertCircle, ExternalLink } from 'lucide-react';
+import { FileSpreadsheet, Calendar, HardDrive, CheckCircle2, AlertCircle, ExternalLink, RefreshCw } from 'lucide-react';
 import { Sheet } from './Sheet';
 
 interface GoogleWorkspacePanelProps {
   transactions: Transaction[];
+  accounts?: Account[];
   boletos: Boleto[];
   fullBackup: FullBackupPayload;
 }
 
 export const GoogleWorkspacePanel: React.FC<GoogleWorkspacePanelProps> = ({
   transactions,
+  accounts = [],
   boletos,
   fullBackup,
 }) => {
@@ -61,11 +63,14 @@ export const GoogleWorkspacePanel: React.FC<GoogleWorkspacePanelProps> = ({
     setErrorMessage('');
     setSheetUrl(null);
     try {
-      const url = await exportToGoogleSheets(token, transactions);
+      const url = await exportToGoogleSheets(token, transactions, accounts);
       setSheetUrl(url);
-      setStatusMessage('Planilha criada com sucesso no Google Sheets (protegida contra injeção de fórmulas).');
+      setStatusMessage('Planilha criada com sucesso no Google Sheets com banco e conta identificados.');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Falha na exportação.';
+      if (msg.toLowerCase().includes('expirad') || msg.includes('401')) {
+        setToken(null);
+      }
       setErrorMessage(`Erro ao exportar para o Google Sheets: ${msg}`);
     } finally {
       setLoading(false);
@@ -91,6 +96,9 @@ export const GoogleWorkspacePanel: React.FC<GoogleWorkspacePanelProps> = ({
       setStatusMessage(`Vencimento de ${boleto.beneficiario} adicionado ao Google Calendar!`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Falha ao sincronizar.';
+      if (msg.toLowerCase().includes('expirad') || msg.includes('401')) {
+        setToken(null);
+      }
       setErrorMessage(`Erro ao sincronizar com Google Calendar: ${msg}`);
     } finally {
       setLoading(false);
@@ -109,6 +117,9 @@ export const GoogleWorkspacePanel: React.FC<GoogleWorkspacePanelProps> = ({
       setStatusMessage('Backup completo salvo com sucesso no Google Drive!');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Falha no backup.';
+      if (msg.toLowerCase().includes('expirad') || msg.includes('401')) {
+        setToken(null);
+      }
       setErrorMessage(`Erro ao salvar backup no Google Drive: ${msg}`);
     } finally {
       setLoading(false);
@@ -124,11 +135,11 @@ export const GoogleWorkspacePanel: React.FC<GoogleWorkspacePanelProps> = ({
               GOOGLE WORKSPACE
             </span>
             <h3 className="font-display text-base sm:text-lg font-extrabold text-[#0F172A] dark:text-white">
-              Integração Drive, Sheets & Calendar
+              Integração Gmail, Drive, Sheets &amp; Calendar
             </h3>
           </div>
           <p className="text-xs sm:text-sm text-[#64748B] dark:text-slate-400">
-            Exporte planilhas seguras, agende vencimentos de dia inteiro no calendário e salve backups no Drive.
+            Leia extratos do Gmail em Extrações, exporte planilhas seguras, agende vencimentos e salve backups no Drive.
           </p>
         </div>
 
@@ -142,9 +153,20 @@ export const GoogleWorkspacePanel: React.FC<GoogleWorkspacePanelProps> = ({
             <span>Conectar com Google Workspace</span>
           </button>
         ) : (
-          <div className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-4 py-2 rounded-xl text-xs text-emerald-800 dark:text-emerald-300">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>Conectado ao Google Workspace</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-3.5 py-2 rounded-xl text-xs text-emerald-800 dark:text-emerald-300">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>Conectado ao Google Workspace</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleLogin}
+              disabled={loading}
+              title="Renovar autorização OAuth"
+              className="px-3 min-h-9 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1.5 cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Reconectar
+            </button>
           </div>
         )}
       </div>

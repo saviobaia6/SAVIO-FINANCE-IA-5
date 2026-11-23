@@ -50,7 +50,7 @@ import type { SyncStatus } from '../services/cloudSyncService';
 import { FinancialCalendarWidget } from './FinancialCalendarWidget';
 import { usePrivacy } from '../contexts/PrivacyContext';
 import { formatarValor } from '../utils/formatters';
-import { InstitutionAvatar } from './InstitutionAvatar';
+import { BankLogo } from './BankLogo';
 import { FinanceChart } from './finance/FinanceChart';
 import { PeriodFilter } from './finance/PeriodFilter';
 import { IncomeSourceCard } from './finance/IncomeSourceCard';
@@ -718,7 +718,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 className="sf-card-interactive text-left p-3 sm:p-3.5 min-h-[54px] flex items-center justify-between gap-2.5 cursor-pointer min-w-0"
               >
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <InstitutionAvatar name={acc.institutionName} size="md" />
+                  <BankLogo
+                    bankName={acc.institutionName}
+                    bankCode={acc.bankCode}
+                    logoUrl={acc.logoUrl}
+                    size={38}
+                  />
                   <div className="min-w-0">
                     <div className="font-display text-xs font-bold text-[#0F172A] dark:text-white truncate">
                       {acc.institutionName}
@@ -842,6 +847,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* 6. Tabbed Transactions & Minimizable Calendar Widget */}
       <FinancialCalendarWidget
         transactions={transactions}
+        accounts={accounts}
         scope={scope}
         period={period}
         onEditTransaction={onEditTransaction}

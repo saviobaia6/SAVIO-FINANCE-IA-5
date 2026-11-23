@@ -26,16 +26,25 @@ import {
   Trash2,
   Link2,
   Landmark,
+  Mail,
   Smartphone,
 } from 'lucide-react';
+import { BankLogo } from './BankLogo';
+import { GmailStatementsTab } from './GmailStatementsTab';
+import type { CreditCard } from '../types';
 
 interface ImportsViewProps {
   accounts: Account[];
+  creditCards?: CreditCard[];
   transactions: Transaction[];
   categoryRules?: CategoryRule[];
   onAddCategoryRule?: (rule: Omit<CategoryRule, 'id' | 'createdAt'>) => void;
   onDeleteCategoryRule?: (id: string) => void;
   onImportTransactions: (items: Omit<Transaction, 'id'>[]) => void;
+  onImportCardTransactions?: (
+    items: Omit<Transaction, 'id'>[],
+    meta: { fileName: string; batchFingerprint: string; cardId: string }
+  ) => void;
 }
 
 interface ParsedRow {
@@ -137,13 +146,16 @@ function parseBasicOfx(text: string): RawParsedRow[] {
 
 export const ImportsView: React.FC<ImportsViewProps> = ({
   accounts,
+  creditCards = [],
   transactions,
   categoryRules = [],
   onAddCategoryRule,
   onDeleteCategoryRule,
   onImportTransactions,
+  onImportCardTransactions,
 }) => {
   const { hideValues } = usePrivacy();
+  const [sourceTab, setSourceTab] = useState<'FILE' | 'GMAIL'>('FILE');
   const activeAccounts = accounts.filter((a) => !a.archived);
   const [fileName, setFileName] = useState('');
   const [targetAccountId, setTargetAccountId] = useState(activeAccounts[0]?.id || accounts[0]?.id || '');
@@ -324,14 +336,53 @@ export const ImportsView: React.FC<ImportsViewProps> = ({
 
   return (
     <div className="space-y-6 animate-fadeIn">
-      <div>
-        <h2 className="font-display text-xl sm:text-2xl font-extrabold text-[#0F172A] dark:text-white">
-          Extratos & Conciliação OFX/CSV
-        </h2>
-        <p className="text-xs sm:text-sm text-[#64748B] dark:text-slate-400">
-          Auto-categorização por regras, deduplicação por idempotência e baixa automática de lançamentos Pendentes/Planejados compatíveis.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 className="font-display text-xl sm:text-2xl font-extrabold text-[#0F172A] dark:text-white">
+            Extratos &amp; Conciliação OFX/CSV/Gmail
+          </h2>
+          <p className="text-xs sm:text-sm text-[#64748B] dark:text-slate-400">
+            Auto-categorização por regras, deduplicação por idempotência e leitura direta de extratos no Gmail.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 shrink-0">
+          <button
+            type="button"
+            onClick={() => setSourceTab('FILE')}
+            className={`min-h-10 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${
+              sourceTab === 'FILE'
+                ? 'bg-white dark:bg-slate-900 text-[#0F172A] dark:text-white shadow-xs'
+                : 'text-slate-500 dark:text-slate-400'
+            }`}
+          >
+            <Upload size={14} /> Arquivo OFX/CSV
+          </button>
+          <button
+            type="button"
+            onClick={() => setSourceTab('GMAIL')}
+            className={`min-h-10 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${
+              sourceTab === 'GMAIL'
+                ? 'bg-white dark:bg-slate-900 text-[#0F172A] dark:text-white shadow-xs'
+                : 'text-slate-500 dark:text-slate-400'
+            }`}
+          >
+            <Mail size={14} /> Gmail
+          </button>
+        </div>
       </div>
+
+      {sourceTab === 'GMAIL' ? (
+        <GmailStatementsTab
+          accounts={accounts}
+          creditCards={creditCards}
+          transactions={transactions}
+          categoryRules={categoryRules}
+          onImportAccountTransactions={(items) => onImportTransactions(items)}
+          onImportCardTransactions={onImportCardTransactions}
+        />
+      ) : (
+        <>
 
       {statusMsg && (
         <div className="p-4 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 rounded-2xl text-xs sm:text-sm font-semibold flex items-center gap-2">
@@ -355,17 +406,30 @@ export const ImportsView: React.FC<ImportsViewProps> = ({
             <label className="block text-xs font-semibold text-[#64748B] dark:text-slate-400 mb-1">
               Conta de destino dos lançamentos
             </label>
-            <select
-              value={targetAccountId}
-              onChange={(e) => setTargetAccountId(e.target.value)}
-              className="w-full border border-[#E2E8F0] dark:border-slate-700 rounded-xl px-4 py-3 text-sm bg-white dark:bg-slate-800 text-[#0F172A] dark:text-white min-h-12"
-            >
-              {activeAccounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.institutionName} · {a.accountName} ({a.entityId})
-                </option>
-              ))}
-            </select>
+            <div className="flex items-center gap-2.5">
+              {(() => {
+                const selectedTargetAcc = activeAccounts.find((a) => a.id === targetAccountId);
+                return selectedTargetAcc ? (
+                  <BankLogo
+                    bankName={selectedTargetAcc.institutionName}
+                    bankCode={selectedTargetAcc.bankCode}
+                    logoUrl={selectedTargetAcc.logoUrl}
+                    size={38}
+                  />
+                ) : null;
+              })()}
+              <select
+                value={targetAccountId}
+                onChange={(e) => setTargetAccountId(e.target.value)}
+                className="flex-1 min-w-0 border border-[#E2E8F0] dark:border-slate-700 rounded-xl px-4 py-3 text-sm bg-white dark:bg-slate-800 text-[#0F172A] dark:text-white min-h-12"
+              >
+                {activeAccounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.institutionName} · {a.accountName} ({a.entityId})
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <label className="border-2 border-dashed border-[#E2E8F0] dark:border-slate-700 hover:border-[#059669] rounded-2xl p-7 flex flex-col items-center justify-center cursor-pointer transition-colors bg-[#F8FAFC] dark:bg-slate-800/40">
@@ -378,16 +442,23 @@ export const ImportsView: React.FC<ImportsViewProps> = ({
 
           {detectedBank && (
             <div className="p-3 rounded-xl bg-[#F8FAFC] dark:bg-white/5 border border-[#E2E8F0] dark:border-white/10 flex flex-wrap items-center justify-between gap-2 text-xs">
-              <div className="min-w-0">
-                <span className="font-bold text-[#0F172A] dark:text-white block truncate">
-                  {detectedBank.name
-                    ? `${detectedBank.name}${detectedBank.code ? ` (${detectedBank.code})` : ''}`
-                    : 'Banco não identificado automaticamente — ajuste a conta acima'}
-                </span>
-                <span className="text-[11px] text-[#64748B] dark:text-slate-400">
-                  {detectedBank.ispb ? `ISPB ${detectedBank.ispb} · ` : ''}
-                  Confiança: {detectedBank.confidence}
-                </span>
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                <BankLogo
+                  bankName={detectedBank.name || 'Banco'}
+                  bankCode={detectedBank.code}
+                  size={34}
+                />
+                <div className="min-w-0">
+                  <span className="font-bold text-[#0F172A] dark:text-white block truncate">
+                    {detectedBank.name
+                      ? `${detectedBank.name}${detectedBank.code ? ` (${detectedBank.code})` : ''}`
+                      : 'Banco não identificado automaticamente — ajuste a conta acima'}
+                  </span>
+                  <span className="text-[11px] text-[#64748B] dark:text-slate-400">
+                    {detectedBank.ispb ? `ISPB ${detectedBank.ispb} · ` : ''}
+                    Confiança: {detectedBank.confidence}
+                  </span>
+                </div>
               </div>
               {detectedBank.type === 'fisico' && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-bold uppercase bg-slate-100 text-[#0F172A] border-slate-300 dark:bg-blue-950/70 dark:text-blue-200 dark:border-blue-800 shrink-0">
@@ -624,6 +695,8 @@ export const ImportsView: React.FC<ImportsViewProps> = ({
             </div>
           )}
         </div>
+      )}
+        </>
       )}
     </div>
   );

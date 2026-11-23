@@ -24,6 +24,10 @@ export const KNOWN_BRAZILIAN_BANK_PACKAGES: readonly AuthorizedBankPackage[] = [
   { packageName: 'br.com.original.bank', institutionName: 'Banco Original', verified: false },
   { packageName: 'br.com.sicredi.app', institutionName: 'Sicredi', verified: false },
   { packageName: 'br.com.sicoob.sicoobnetpessoal', institutionName: 'Sicoob', verified: false },
+  { packageName: 'br.com.rico.mobile', institutionName: 'Rico Investimentos', verified: true },
+  { packageName: 'br.com.rico.homebroker', institutionName: 'Rico Investimentos', verified: true },
+  { packageName: 'br.com.clear.mobile', institutionName: 'Clear Corretora', verified: true },
+  { packageName: 'br.com.clear.pit', institutionName: 'Clear Corretora', verified: true },
 ];
 
 export const DEFAULT_AUTHORIZED_PACKAGES: string[] = KNOWN_BRAZILIAN_BANK_PACKAGES.filter(

@@ -1,5 +1,12 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Account, Boleto, Transaction } from '../types';
+import {
+  Account,
+  Boleto,
+  CategoryRule,
+  CROSS_ENTITY_NATURE_LABELS,
+  CrossEntityTransferNature,
+  Transaction,
+} from '../types';
 import { toCents, fromCents } from '../utils/financeCalculations';
 import { MoneyCents, parseMoneyInput } from '../domain/money/money';
 import { todayLocal } from '../utils/dateLocal';
@@ -17,19 +24,28 @@ import {
   Lock,
   ArrowLeftRight,
   ArrowUpRight,
+  ArrowRight,
   BarChart3,
+  BookOpen,
+  FileSpreadsheet,
+  Cloud,
 } from 'lucide-react';
 import { Sheet } from './Sheet';
 import { usePrivacy } from '../contexts/PrivacyContext';
 import { formatarValor } from '../utils/formatters';
-import { InstitutionAvatar } from './InstitutionAvatar';
+import { BankLogo } from './BankLogo';
 import { InstitutionSelectorDrawer } from './InstitutionSelectorDrawer';
 import { AccountAnalytics } from './finance/AccountAnalytics';
+import { CashBookModule } from './accounts/CashBookModule';
+import { SpreadsheetImportTab } from './accounts/SpreadsheetImportTab';
+
+type AccountsSubTab = 'ACCOUNTS' | 'CASH_BOOK' | 'IMPORT_LOCAL' | 'IMPORT_DRIVE';
 
 interface AccountsViewProps {
   accounts: Account[];
   transactions: Transaction[];
   boletos?: Boleto[];
+  categoryRules?: CategoryRule[];
   selectedAccountId?: string | null;
   onClearSelectedAccount?: () => void;
   onAddAccount: (account: Omit<Account, 'id'>) => void;
@@ -37,12 +53,21 @@ interface AccountsViewProps {
   onToggleArchiveAccount: (id: string) => void;
   onInspectAccount?: (account: Account) => void;
   onEditTransaction?: (tx: Transaction) => void;
+  onSaveTransaction?: (tx: Omit<Transaction, 'id'>, editId?: string) => void;
+  onDeleteTransaction?: (id: string) => void;
+  onRestoreTransaction?: (id: string) => void;
+  onCommitSpreadsheetImport?: (
+    items: Omit<Transaction, 'id'>[],
+    meta: { fileName: string; batchFingerprint: string; accountId: string }
+  ) => { acceptedCount: number; skippedDuplicatesCount: number };
   onExecuteTransfer?: (params: {
     originAccountId: string;
     destinationAccountId: string;
     amountCents: MoneyCents;
     date: string;
     description: string;
+    notes?: string;
+    crossEntityNature?: CrossEntityTransferNature;
   }) => { ok: boolean; error?: string };
 }
 
@@ -50,6 +75,7 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
   accounts,
   transactions,
   boletos,
+  categoryRules = [],
   selectedAccountId = null,
   onClearSelectedAccount,
   onAddAccount,
@@ -57,10 +83,15 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
   onToggleArchiveAccount,
   onInspectAccount,
   onEditTransaction,
+  onSaveTransaction,
+  onDeleteTransaction,
+  onRestoreTransaction,
+  onCommitSpreadsheetImport,
   onExecuteTransfer,
 }) => {
   const { hideValues } = usePrivacy();
   const isDesktop = useIsDesktop();
+  const [subTab, setSubTab] = useState<AccountsSubTab>('ACCOUNTS');
   const [modalOpen, setModalOpen] = useState(false);
   const [activeAccountId, setActiveAccountId] = useState<string | null>(selectedAccountId);
 
@@ -75,6 +106,7 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
     [accounts, activeAccountId]
   );
   const [institutionName, setInstitutionName] = useState('');
+  const [institutionCode, setInstitutionCode] = useState<string | undefined>(undefined);
   const [accountName, setAccountName] = useState('');
   const [accountType, setAccountType] = useState<Account['accountType']>('checking');
   const [entityId, setEntityId] = useState<'CPF' | 'CNPJ'>('CPF');
@@ -88,6 +120,10 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
   const [transferAmountStr, setTransferAmountStr] = useState('');
   const [transferDate, setTransferDate] = useState(() => todayLocal());
   const [transferDesc, setTransferDesc] = useState('');
+  const [transferNotes, setTransferNotes] = useState('');
+  const [crossEntityNature, setCrossEntityNature] =
+    useState<CrossEntityTransferNature>('TRANSFERENCIA_NEUTRA');
+  const [awaitingTransferConfirm, setAwaitingTransferConfirm] = useState(false);
   const [transferError, setTransferError] = useState('');
 
   const activeAccounts = useMemo(() => accounts.filter((a) => !a.archived), [accounts]);
@@ -132,6 +168,7 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
     onAddAccount({
       entityId,
       institutionName: institutionName.trim(),
+      ...(institutionCode ? { bankCode: institutionCode } : {}),
       accountName: accountName.trim(),
       accountType,
       openingBalance: fromCents(openingCents),
@@ -141,6 +178,7 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
     });
 
     setInstitutionName('');
+    setInstitutionCode(undefined);
     setAccountName('');
     setOpeningBalanceStr('0,00');
     setModalOpen(false);
@@ -168,15 +206,29 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
     );
   }
 
+  const selectedOriginAcc = useMemo(
+    () => activeAccounts.find((a) => a.id === originAccountId) || null,
+    [activeAccounts, originAccountId]
+  );
+  const selectedDestAcc = useMemo(
+    () => activeAccounts.find((a) => a.id === destinationAccountId) || null,
+    [activeAccounts, destinationAccountId]
+  );
+  const isCrossEntityTransfer = Boolean(
+    selectedOriginAcc &&
+      selectedDestAcc &&
+      selectedOriginAcc.entityId !== selectedDestAcc.entityId
+  );
+
   return (
-    <div className="space-y-6 animate-fadeIn">
+    <div className="space-y-4 sm:space-y-6 animate-fadeIn">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="font-display text-xl sm:text-2xl font-bold text-[#0F172A] dark:text-white">
-            Contas Bancárias
+            Contas Bancárias & Livro Caixa
           </h2>
           <p className="font-sans text-xs sm:text-sm text-[#64748B] dark:text-slate-400">
-            Saldo calculado automaticamente pelo saldo inicial somado aos lançamentos vinculados.
+            Saldos por instituição, Livro Caixa PF/PJ separado, calendário financeiro e importação de planilhas.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -185,11 +237,14 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
               type="button"
               onClick={() => {
                 setTransferError('');
+                setAwaitingTransferConfirm(false);
                 setOriginAccountId(activeAccounts[0]?.id || '');
                 setDestinationAccountId(activeAccounts[1]?.id || '');
                 setTransferAmountStr('');
                 setTransferDate(todayLocal());
                 setTransferDesc('');
+                setTransferNotes('');
+                setCrossEntityNature('TRANSFERENCIA_NEUTRA');
                 setTransferModalOpen(true);
               }}
               className="sf-card-interactive px-4 min-h-11 text-xs sm:text-sm font-semibold text-[#0F172A] dark:text-slate-200 flex items-center justify-center gap-2 cursor-pointer"
@@ -202,6 +257,7 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
             type="button"
             onClick={() => {
               setErrorMsg('');
+              setInstitutionCode(undefined);
               setModalOpen(true);
             }}
             className="bg-[#061E3E] hover:bg-[#0F172A] dark:bg-[#059669] dark:hover:bg-emerald-700 text-white px-4 min-h-11 rounded-xl text-xs sm:text-sm font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer"
@@ -211,6 +267,70 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Sub-navigation bar inside Contas Bancárias */}
+      <nav
+        aria-label="Submódulos de Contas Bancárias"
+        className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-1.5 rounded-2xl bg-slate-100/90 dark:bg-slate-800/70 border border-slate-200/70 dark:border-slate-700/70"
+      >
+        {(
+          [
+            { id: 'ACCOUNTS', label: 'Contas', icon: <Wallet size={14} /> },
+            { id: 'CASH_BOOK', label: 'Livro Caixa', icon: <BookOpen size={14} /> },
+            { id: 'IMPORT_LOCAL', label: 'Importar planilha', icon: <FileSpreadsheet size={14} /> },
+            { id: 'IMPORT_DRIVE', label: 'Importar do Drive', icon: <Cloud size={14} /> },
+          ] as const
+        ).map((tab) => {
+          const active = subTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setSubTab(tab.id)}
+              className={`min-h-10 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                active
+                  ? 'bg-white dark:bg-slate-900 text-[#061E3E] dark:text-[#10B981] shadow-xs border border-slate-200/70 dark:border-slate-700'
+                  : 'text-[#64748B] dark:text-slate-300 hover:text-[#0F172A] dark:hover:text-white'
+              }`}
+            >
+              {tab.icon}
+              <span className="truncate">{tab.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      {subTab === 'CASH_BOOK' && (
+        <CashBookModule
+          accounts={accounts}
+          transactions={transactions}
+          onSaveTransaction={(tx, editId) => onSaveTransaction?.(tx, editId)}
+          onExecuteTransfer={(params) =>
+            onExecuteTransfer
+              ? onExecuteTransfer(params)
+              : { ok: false, error: 'Transferência indisponível nesta sessão.' }
+          }
+          onDeleteTransaction={onDeleteTransaction}
+          onRestoreTransaction={onRestoreTransaction}
+        />
+      )}
+
+      {(subTab === 'IMPORT_LOCAL' || subTab === 'IMPORT_DRIVE') && (
+        <SpreadsheetImportTab
+          mode={subTab === 'IMPORT_DRIVE' ? 'DRIVE' : 'LOCAL'}
+          accounts={accounts}
+          transactions={transactions}
+          categoryRules={categoryRules}
+          onCommitImport={(items, meta) =>
+            onCommitSpreadsheetImport
+              ? onCommitSpreadsheetImport(items, meta)
+              : { acceptedCount: 0, skippedDuplicatesCount: 0 }
+          }
+        />
+      )}
+
+      {subTab === 'ACCOUNTS' && (
+        <>
 
       <div className="sf-card p-5 sm:p-6 flex items-center justify-between gap-4">
         <div>
@@ -288,7 +408,13 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
                 <div key={acc.id} className={`p-4 space-y-2 ${acc.archived ? 'opacity-70 bg-slate-50/60 dark:bg-slate-800/30' : ''}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-start gap-2.5 min-w-0">
-                      <InstitutionAvatar name={acc.institutionName} size="md" className="mt-0.5" />
+                      <BankLogo
+                        bankName={acc.institutionName}
+                        bankCode={acc.bankCode}
+                        logoUrl={acc.logoUrl}
+                        size={40}
+                        className="mt-0.5"
+                      />
                       <button
                         type="button"
                         onClick={() => setActiveAccountId(acc.id)}
@@ -429,7 +555,12 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
                         onClick={() => setActiveAccountId(acc.id)}
                         className="flex items-center gap-3 text-left cursor-pointer group"
                       >
-                        <InstitutionAvatar name={acc.institutionName} size="sm" />
+                        <BankLogo
+                          bankName={acc.institutionName}
+                          bankCode={acc.bankCode}
+                          logoUrl={acc.logoUrl}
+                          size={36}
+                        />
                         <div>
                           <div className="font-bold text-slate-800 dark:text-white flex items-center gap-2 group-hover:text-[#059669]">
                             <span>{acc.institutionName}</span>
@@ -542,6 +673,8 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
         </div>
         )}
       </div>
+        </>
+      )}
 
       {/* Add Account Sheet */}
       <Sheet
@@ -560,6 +693,7 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
             selectedName={institutionName}
             onSelect={(inst) => {
               setInstitutionName(inst.nome);
+              setInstitutionCode(inst.codigo);
               setErrorMsg('');
             }}
             defaultOpen
@@ -572,14 +706,21 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
             </label>
             <div className="flex items-center gap-2.5">
               {institutionName.trim() && (
-                <InstitutionAvatar name={institutionName} size="lg" />
+                <BankLogo
+                  bankName={institutionName}
+                  bankCode={institutionCode}
+                  size={42}
+                />
               )}
               <input
                 type="text"
                 required
                 placeholder="Ex.: 99Pay, Nubank, Sicredi, Caixa"
                 value={institutionName}
-                onChange={(e) => setInstitutionName(e.target.value)}
+                onChange={(e) => {
+                  setInstitutionName(e.target.value);
+                  setInstitutionCode(undefined);
+                }}
                 className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-white min-h-12"
               />
             </div>
@@ -662,7 +803,7 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
         open={transferModalOpen}
         onClose={() => setTransferModalOpen(false)}
         title="Transferência entre contas próprias"
-        subtitle="Gera saída e entrada pareadas sem distorcer receitas ou despesas"
+        subtitle="Gera saída e entrada pareadas com visualização de origem e destino"
       >
         <form
           onSubmit={(e) => {
@@ -685,15 +826,28 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
               return;
             }
 
+            if (originAccountId === destinationAccountId) {
+              setTransferError('Selecione contas diferentes para origem e destino.');
+              return;
+            }
+
+            if (!awaitingTransferConfirm) {
+              setAwaitingTransferConfirm(true);
+              return;
+            }
+
             const result = onExecuteTransfer({
               originAccountId,
               destinationAccountId,
               amountCents,
               date: transferDate || todayLocal(),
               description: transferDesc.trim(),
+              notes: transferNotes.trim() || undefined,
+              crossEntityNature: isCrossEntityTransfer ? crossEntityNature : 'TRANSFERENCIA_NEUTRA',
             });
 
             if (!result.ok) {
+              setAwaitingTransferConfirm(false);
               setTransferError(result.error || 'Não foi possível concluir a transferência.');
               return;
             }
@@ -708,13 +862,65 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
             </div>
           )}
 
+          {selectedOriginAcc && selectedDestAcc && (
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <BankLogo
+                  bankName={selectedOriginAcc.institutionName}
+                  bankCode={selectedOriginAcc.bankCode}
+                  logoUrl={selectedOriginAcc.logoUrl}
+                  size={38}
+                />
+                <div className="min-w-0">
+                  <span className="block text-[10px] font-bold uppercase text-slate-400">Origem</span>
+                  <strong className="block text-xs text-[#0F172A] dark:text-white truncate">
+                    {selectedOriginAcc.institutionName} · {selectedOriginAcc.accountName}
+                  </strong>
+                  <span className="text-[10px] font-semibold text-[#64748B]">
+                    {selectedOriginAcc.entityId}
+                  </span>
+                </div>
+              </div>
+
+              <div className="text-center px-1 shrink-0">
+                <ArrowRight size={18} className="text-[#059669] mx-auto" />
+                {transferAmountStr && (
+                  <span className="block font-money text-[11px] font-extrabold text-[#059669] dark:text-[#10B981]">
+                    R$ {transferAmountStr}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 min-w-0 flex-1 justify-end text-right">
+                <div className="min-w-0">
+                  <span className="block text-[10px] font-bold uppercase text-slate-400">Destino</span>
+                  <strong className="block text-xs text-[#0F172A] dark:text-white truncate">
+                    {selectedDestAcc.institutionName} · {selectedDestAcc.accountName}
+                  </strong>
+                  <span className="text-[10px] font-semibold text-[#64748B]">
+                    {selectedDestAcc.entityId}
+                  </span>
+                </div>
+                <BankLogo
+                  bankName={selectedDestAcc.institutionName}
+                  bankCode={selectedDestAcc.bankCode}
+                  logoUrl={selectedDestAcc.logoUrl}
+                  size={38}
+                />
+              </div>
+            </div>
+          )}
+
           <div>
             <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
               Conta de origem (saída)
             </label>
             <select
               value={originAccountId}
-              onChange={(e) => setOriginAccountId(e.target.value)}
+              onChange={(e) => {
+                setOriginAccountId(e.target.value);
+                setAwaitingTransferConfirm(false);
+              }}
               className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-3 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-white min-h-12"
             >
               {activeAccounts.map((acc) => (
@@ -731,7 +937,10 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
             </label>
             <select
               value={destinationAccountId}
-              onChange={(e) => setDestinationAccountId(e.target.value)}
+              onChange={(e) => {
+                setDestinationAccountId(e.target.value);
+                setAwaitingTransferConfirm(false);
+              }}
               className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-3 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-white min-h-12"
             >
               {activeAccounts.map((acc) => (
@@ -741,6 +950,29 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
               ))}
             </select>
           </div>
+
+          {isCrossEntityTransfer && (
+            <div className="p-3 rounded-xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 space-y-1.5">
+              <label className="block text-xs font-bold text-amber-900 dark:text-amber-200">
+                Movimentação entre CPF e CNPJ — Natureza Contábil
+              </label>
+              <select
+                value={crossEntityNature}
+                onChange={(e) =>
+                  setCrossEntityNature(e.target.value as CrossEntityTransferNature)
+                }
+                className="w-full border border-amber-300 dark:border-amber-700 rounded-xl px-3 py-2 text-xs font-semibold bg-white dark:bg-slate-900 text-[#0F172A] dark:text-white min-h-10"
+              >
+                {(Object.keys(CROSS_ENTITY_NATURE_LABELS) as CrossEntityTransferNature[]).map(
+                  (k) => (
+                    <option key={k} value={k}>
+                      {CROSS_ENTITY_NATURE_LABELS[k]}
+                    </option>
+                  )
+                )}
+              </select>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -753,7 +985,10 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
                 required
                 placeholder="0,00"
                 value={transferAmountStr}
-                onChange={(e) => setTransferAmountStr(e.target.value)}
+                onChange={(e) => {
+                  setTransferAmountStr(e.target.value);
+                  setAwaitingTransferConfirm(false);
+                }}
                 className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold bg-white dark:bg-slate-800 text-slate-900 dark:text-white min-h-12"
               />
             </div>
@@ -785,6 +1020,27 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
             />
           </div>
 
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
+              Observações (opcional)
+            </label>
+            <input
+              type="text"
+              placeholder="Anotação para controle no Livro Caixa"
+              value={transferNotes}
+              onChange={(e) => setTransferNotes(e.target.value)}
+              className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-white min-h-12"
+            />
+          </div>
+
+          {awaitingTransferConfirm && selectedOriginAcc && selectedDestAcc && (
+            <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-300 dark:border-emerald-700 text-xs text-emerald-900 dark:text-emerald-200">
+              Confirma a transferência de <strong className="font-money">R$ {transferAmountStr}</strong> de{' '}
+              <strong>{selectedOriginAcc.institutionName} · {selectedOriginAcc.accountName}</strong> para{' '}
+              <strong>{selectedDestAcc.institutionName} · {selectedDestAcc.accountName}</strong>?
+            </div>
+          )}
+
           <div className="flex gap-3 pt-2">
             <button
               type="button"
@@ -797,7 +1053,8 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
               type="submit"
               className="flex-[1.5] min-h-12 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 cursor-pointer"
             >
-              <ArrowLeftRight size={16} /> Confirmar transferência
+              <ArrowLeftRight size={16} />{' '}
+              {awaitingTransferConfirm ? 'Confirmar transferência' : 'Conferir transferência'}
             </button>
           </div>
         </form>

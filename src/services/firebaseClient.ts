@@ -53,7 +53,7 @@ export const resolvedFirebaseConfig: ResolvedFirebaseConfig = {
   storageBucket: firebaseAppletConfig.storageBucket,
   messagingSenderId: firebaseAppletConfig.messagingSenderId,
   appId: firebaseAppletConfig.appId,
-  firestoreDatabaseId: firebaseAppletConfig.firestoreDatabaseId,
+  firestoreDatabaseId: (firebaseAppletConfig as { firestoreDatabaseId?: string }).firestoreDatabaseId,
 };
 
 export const app: FirebaseApp =

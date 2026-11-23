@@ -187,7 +187,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   const handleExportCsv = () => {
     setBackupError('');
-    downloadTransactionsCsv(transactions);
+    downloadTransactionsCsv(transactions, dataset.accounts);
     setBackupMsg(`${transactions.length} lançamento(s) exportado(s) para planilha CSV (compatível com Excel).`);
   };
 
@@ -949,8 +949,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 TRANSACTION_REVERSED: 'Estorno contábil',
                 TRANSACTION_CANCELLED: 'Cancelamento',
                 TRANSACTION_RESTORED: 'Restauração',
-                TRANSFER_EXECUTED: 'Transferência interna',
+                TRANSACTION_EDITED: 'Edição contábil',
+                TRANSFER_EXECUTED: 'Transferência',
                 EXTRACTION_BATCH_INTEGRATED: 'Extração bancária',
+                SPREADSHEET_IMPORTED: 'Importação planilha',
+                CARD_UPDATED: 'Cartão atualizado',
+                CARD_CYCLE_CLOSED: 'Ciclo fechado',
+                CARD_PAYMENT_RECORDED: 'Pagamento fatura',
               };
               const badgeClass: Record<AuditLogEntry['action'], string> = {
                 TRANSACTION_REVERSED:
@@ -959,10 +964,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   'bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300',
                 TRANSACTION_RESTORED:
                   'bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300',
+                TRANSACTION_EDITED:
+                  'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300',
                 TRANSFER_EXECUTED:
                   'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300',
                 EXTRACTION_BATCH_INTEGRATED:
                   'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300',
+                SPREADSHEET_IMPORTED:
+                  'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300',
+                CARD_UPDATED:
+                  'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+                CARD_CYCLE_CLOSED:
+                  'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300',
+                CARD_PAYMENT_RECORDED:
+                  'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300',
               };
               return (
                 <div key={entry.id} className="py-3 flex items-start justify-between gap-3 text-xs">
@@ -990,7 +1005,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       </div>
 
       {/* Google Workspace Integration Panel */}
-      <GoogleWorkspacePanel transactions={transactions} boletos={boletos} fullBackup={fullBackup} />
+      <GoogleWorkspacePanel
+        transactions={transactions}
+        accounts={dataset.accounts}
+        boletos={boletos}
+        fullBackup={fullBackup}
+      />
 
       <div className="sf-card p-5 sm:p-6 space-y-6">
         <div className="space-y-4">

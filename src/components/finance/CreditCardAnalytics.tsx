@@ -4,7 +4,7 @@ import type { CreditCard, Transaction } from '../../types';
 import { APP_CATEGORIES } from '../../types';
 import { calculateCardAnalytics } from '../../domain/cards/CardAnalyticsService';
 import type { FinanceFilters } from '../../domain/finance/FinanceConsolidationService';
-import { InstitutionAvatar } from '../InstitutionAvatar';
+import { BankLogo } from '../BankLogo';
 import { FinanceSummaryCard } from './FinanceSummaryCard';
 import { FinanceChart } from './FinanceChart';
 import { PeriodFilter } from './PeriodFilter';
@@ -59,7 +59,12 @@ export const CreditCardAnalytics: React.FC<CreditCardAnalyticsProps> = ({
           >
             <ArrowLeft size={15} /> Voltar
           </button>
-          <InstitutionAvatar name={card.institutionName} size="lg" />
+          <BankLogo
+            bankName={card.institutionName}
+            bankCode={card.bankCode}
+            logoUrl={card.logoUrl}
+            size={42}
+          />
           <div className="min-w-0">
             <h2 className="font-display text-lg sm:text-xl font-bold text-[#0F172A] dark:text-white truncate">
               {card.cardName} · Final {card.last4}

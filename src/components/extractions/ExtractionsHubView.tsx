@@ -70,6 +70,7 @@ import {
   Landmark,
   Layers,
   Link2,
+  Mail,
   Plus,
   Scale,
   ScanSearch,
@@ -81,9 +82,11 @@ import {
   Upload,
   XCircle,
 } from 'lucide-react';
+import { GmailStatementsTab } from '../GmailStatementsTab';
 
 export type ExtractionsSubTab =
   | 'overview'
+  | 'gmail'
   | 'review'
   | 'reconcile'
   | 'institutions'
@@ -116,6 +119,14 @@ interface ExtractionsHubViewProps {
   onAddCategoryRule?: (rule: Omit<CategoryRule, 'id' | 'createdAt'>) => void;
   onDeleteCategoryRule?: (id: string) => void;
   onUpdateConsolidationPrefs: (next: ConsolidationPreferences) => void;
+  onCommitSpreadsheetImport?: (
+    items: Omit<Transaction, 'id'>[],
+    meta: { fileName: string; batchFingerprint: string; accountId: string }
+  ) => { acceptedCount: number; skippedDuplicatesCount: number };
+  onCommitCardImport?: (
+    items: Omit<Transaction, 'id'>[],
+    meta: { fileName: string; batchFingerprint: string; cardId: string }
+  ) => { acceptedCount: number; skippedDuplicatesCount: number };
   onNavigateModule?: (tab: string) => void;
 }
 
@@ -170,6 +181,8 @@ export const ExtractionsHubView: React.FC<ExtractionsHubViewProps> = ({
   onAddCategoryRule,
   onDeleteCategoryRule,
   onUpdateConsolidationPrefs,
+  onCommitSpreadsheetImport,
+  onCommitCardImport,
   onNavigateModule,
 }) => {
   const { hideValues } = usePrivacy();
@@ -1105,6 +1118,7 @@ export const ExtractionsHubView: React.FC<ExtractionsHubViewProps> = ({
         {(
           [
             { id: 'overview', label: 'Visão geral & Importar', icon: Upload },
+            { id: 'gmail', label: 'Extratos do Gmail', icon: Mail },
             {
               id: 'review',
               label: `Revisão (${overviewStats.pending + overviewStats.unknown + overviewStats.approved})`,
@@ -2548,6 +2562,22 @@ export const ExtractionsHubView: React.FC<ExtractionsHubViewProps> = ({
           period={period}
           onUpdatePreferences={onUpdateConsolidationPrefs}
           onNavigateModule={onNavigateModule}
+        />
+      )}
+
+      {/* ==================== TAB GMAIL: EXTRATOS VIA GMAIL ==================== */}
+      {subTab === 'gmail' && (
+        <GmailStatementsTab
+          accounts={accounts}
+          creditCards={creditCards}
+          transactions={transactions}
+          categoryRules={categoryRules}
+          onImportAccountTransactions={(items, meta) => {
+            if (onCommitSpreadsheetImport && meta) {
+              onCommitSpreadsheetImport(items, meta);
+            }
+          }}
+          onImportCardTransactions={onCommitCardImport}
         />
       )}
 

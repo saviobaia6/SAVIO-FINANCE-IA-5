@@ -189,6 +189,7 @@ export const AccountAnalytics: React.FC<AccountAnalyticsProps> = ({
       {/* Account Filtered Transactions */}
       <TransactionList
         transactions={analytics.transactions}
+        accounts={[account]}
         title={`Movimentações de ${account.institutionName}`}
         onEditTransaction={onEditTransaction}
       />

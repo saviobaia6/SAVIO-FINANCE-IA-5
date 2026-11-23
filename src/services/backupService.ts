@@ -585,7 +585,11 @@ function escapeCsvField(val: string | number): string {
   return str;
 }
 
-export function generateTransactionsCsv(transactions: Transaction[]): string {
+export function generateTransactionsCsv(
+  transactions: Transaction[],
+  accounts: readonly Account[] = []
+): string {
+  const accountById = new Map(accounts.map((a) => [a.id, a]));
   const header = [
     'ID',
     'Data',
@@ -593,6 +597,8 @@ export function generateTransactionsCsv(transactions: Transaction[]): string {
     'Categoria',
     'Operação',
     'Vínculo',
+    'Banco',
+    'Cód. Banco',
     'Conta',
     'Direção',
     'Valor (R$)',
@@ -600,10 +606,15 @@ export function generateTransactionsCsv(transactions: Transaction[]): string {
     'Pagador/Recebedor',
     'ID Externo/E2E',
     'Status',
+    'Observações',
   ];
 
   const rows = transactions.map((t) => {
     const amtCents = getTransactionAmountCents(t);
+    const acc = accountById.get(t.accountId);
+    const bankName = acc?.institutionName || t.account.split('·')[0]?.trim() || 'Banco';
+    const bankCode = acc?.bankCode || '';
+    const accountLabel = acc ? `${acc.institutionName} · ${acc.accountName}` : t.account;
     return [
       t.id,
       t.date,
@@ -611,13 +622,16 @@ export function generateTransactionsCsv(transactions: Transaction[]): string {
       t.category,
       t.operationType || 'OUTRO',
       t.entityId,
-      t.account,
+      bankName,
+      bankCode,
+      accountLabel,
       t.direction === 'INCOME' ? 'Receita' : 'Despesa',
       fromCents(amtCents).toFixed(2).replace('.', ','),
       t.isInternalTransfer ? 'Sim' : 'Não',
       t.counterparty || '',
       t.externalId || '',
       t.status,
+      t.notes || '',
     ];
   });
 
@@ -626,8 +640,11 @@ export function generateTransactionsCsv(transactions: Transaction[]): string {
   return '\uFEFF' + lines.join('\r\n');
 }
 
-export function downloadTransactionsCsv(transactions: Transaction[]): void {
-  const csv = generateTransactionsCsv(transactions);
+export function downloadTransactionsCsv(
+  transactions: Transaction[],
+  accounts: readonly Account[] = []
+): void {
+  const csv = generateTransactionsCsv(transactions, accounts);
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

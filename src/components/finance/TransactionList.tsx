@@ -1,14 +1,16 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ChevronRight } from 'lucide-react';
-import type { Transaction } from '../../types';
+import type { Account, Transaction } from '../../types';
 import { usePrivacy } from '../../contexts/PrivacyContext';
 import { formatarValor } from '../../utils/formatters';
 import { fromCents, getTransactionAmountCents } from '../../domain/money/money';
 import { formatDateBR } from '../../utils/dateUtils';
 import { isCardBillPaymentTransaction } from '../../domain/accounts/BalanceCalculator';
+import { BankLogo } from '../BankLogo';
 
 interface TransactionListProps {
   transactions: readonly Transaction[];
+  accounts?: readonly Account[];
   title?: string;
   emptyMessage?: string;
   maxItems?: number;
@@ -18,6 +20,7 @@ interface TransactionListProps {
 
 export const TransactionList: React.FC<TransactionListProps> = ({
   transactions,
+  accounts = [],
   title = 'Lançamentos',
   emptyMessage = 'Nenhuma movimentação encontrada para os filtros atuais.',
   maxItems,
@@ -26,6 +29,10 @@ export const TransactionList: React.FC<TransactionListProps> = ({
 }) => {
   const { hideValues } = usePrivacy();
   const visible = typeof maxItems === 'number' ? transactions.slice(0, maxItems) : transactions;
+  const accountById = useMemo(
+    () => new Map(accounts.map((a) => [a.id, a])),
+    [accounts]
+  );
 
   return (
     <div className="sf-card overflow-hidden">
@@ -52,6 +59,8 @@ export const TransactionList: React.FC<TransactionListProps> = ({
             {visible.map((t) => {
               const val = fromCents(getTransactionAmountCents(t));
               const isBillPay = isCardBillPaymentTransaction(t);
+              const acc = accountById.get(t.accountId);
+              const bankName = acc?.institutionName || t.account.split('·')[0]?.trim() || 'Banco';
               return (
                 <button
                   key={t.id}
@@ -59,12 +68,18 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                   onClick={() => onEditTransaction?.(t)}
                   className="w-full text-left px-4 py-3 flex items-center justify-between gap-3 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer"
                 >
+                  <BankLogo
+                    bankName={bankName}
+                    bankCode={acc?.bankCode}
+                    logoUrl={acc?.logoUrl}
+                    size={36}
+                  />
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-semibold text-[#0F172A] dark:text-white truncate">
                       {t.description}
                     </div>
                     <div className="text-[11px] text-[#64748B] dark:text-slate-300 mt-0.5 truncate">
-                      {formatDateBR(t.date)} · {t.category} · {t.entityId}
+                      {formatDateBR(t.date)} · {t.category} · {acc ? acc.accountName : t.entityId}
                       {t.isInternalTransfer ? ' · Transferência' : ''}
                       {isBillPay ? ' · Pagto Fatura' : ''}
                       {t.status === 'PENDING' ? ' · Pendente' : t.status === 'PLANNED' ? ' · Planejado' : ''}
@@ -107,6 +122,8 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                 {visible.map((t) => {
                   const val = fromCents(getTransactionAmountCents(t));
                   const isBillPay = isCardBillPaymentTransaction(t);
+                  const acc = accountById.get(t.accountId);
+                  const bankName = acc?.institutionName || t.account.split('·')[0]?.trim() || 'Banco';
                   const statusLabel =
                     t.status === 'CONFIRMED'
                       ? 'Confirmado'
@@ -129,12 +146,22 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                         {formatDateBR(t.date)}
                       </td>
                       <td className="py-3 px-5 font-medium text-[#0F172A] dark:text-white">
-                        <div>{t.description}</div>
-                        <div className="text-[11px] text-[#64748B] dark:text-slate-300">
-                          {t.account} · {t.entityId}
-                          {t.isInternalTransfer ? ' · Transferência interna' : ''}
-                          {isBillPay ? ' · Pagamento de fatura' : ''}
-                          {t.reviewRequired ? ' · Revisar classificação' : ''}
+                        <div className="flex items-center gap-2.5">
+                          <BankLogo
+                            bankName={bankName}
+                            bankCode={acc?.bankCode}
+                            logoUrl={acc?.logoUrl}
+                            size={28}
+                          />
+                          <div className="min-w-0">
+                            <div className="truncate">{t.description}</div>
+                            <div className="text-[11px] text-[#64748B] dark:text-slate-300">
+                              {acc ? `${acc.institutionName} · ${acc.accountName}` : t.account} · {t.entityId}
+                              {t.isInternalTransfer ? ' · Transferência interna' : ''}
+                              {isBillPay ? ' · Pagamento de fatura' : ''}
+                              {t.reviewRequired ? ' · Revisar classificação' : ''}
+                            </div>
+                          </div>
                         </div>
                       </td>
                       <td className="py-3 px-5 text-[#0F172A] dark:text-slate-200">{t.category}</td>
