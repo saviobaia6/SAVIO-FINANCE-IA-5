@@ -4,7 +4,7 @@ import {
   InvestmentResult,
   MonthlySimulationSummary,
   TaxBreakdown,
-} from '../types/investment';
+} from '../types-sub/investment';
 import {
   PRODUCT_TAX_EXEMPT,
   brDateToIso,

@@ -1,4 +1,4 @@
-import { InvestmentProductType } from '../types/investment';
+import { InvestmentProductType } from '../types-sub/investment';
 
 export const PRODUCT_TYPE_LABELS: Record<InvestmentProductType, string> = {
   CDB: 'CDB (Certificado de Depósito Bancário)',

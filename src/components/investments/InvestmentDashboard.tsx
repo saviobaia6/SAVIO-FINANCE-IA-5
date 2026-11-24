@@ -6,7 +6,7 @@ import {
   InvestmentProductType,
   InvestmentSimulation,
   InvestmentSubTab,
-} from '../../types/investment';
+} from '../../types-sub/investment';
 import { fetchCdiWithCache } from '../../services/cdiService';
 import {
   buildHistoricalComparisonWithContributions,

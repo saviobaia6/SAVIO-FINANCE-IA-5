@@ -11,7 +11,7 @@ import {
   LedgerDrilldownFilter,
   APP_CATEGORIES,
 } from '../types';
-import type { SalaryDataset } from '../types/salary';
+import type { SalaryDataset } from '../types-sub/salary';
 import { calculateCountdown } from '../utils/countdown';
 import {
   filterTransactionsByPeriod,

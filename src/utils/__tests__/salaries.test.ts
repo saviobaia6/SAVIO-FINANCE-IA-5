@@ -23,7 +23,7 @@ import {
   saveSalaryDatasetSafely,
 } from '../../services/salaryStorage';
 import { applyBackupDataset, buildFullBackup } from '../../services/backupService';
-import type { SalaryDataset, SalaryRecord, SalarySource } from '../../types/salary';
+import type { SalaryDataset, SalaryRecord, SalarySource } from '../../types-sub/salary';
 
 function createMemoryStorage(): Storage {
   const store = new Map<string, string>();

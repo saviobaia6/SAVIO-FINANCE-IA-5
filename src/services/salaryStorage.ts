@@ -1,4 +1,4 @@
-import type { SalaryDataset } from '../types/salary';
+import type { SalaryDataset } from '../types-sub/salary';
 import {
   STORAGE_KEYS,
   loadJsonWithRecovery,

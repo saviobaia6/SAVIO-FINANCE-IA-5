@@ -21,7 +21,7 @@ import {
   countCalendarDays,
   isoToBrDate,
 } from '../investmentFormatters';
-import { CDIRate } from '../../types/investment';
+import { CDIRate } from '../../types-sub/investment';
 
 afterEach(() => {
   vi.restoreAllMocks();

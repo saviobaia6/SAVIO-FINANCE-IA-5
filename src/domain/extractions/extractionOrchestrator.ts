@@ -9,7 +9,7 @@ import type {
   ExtractionStage,
   InstitutionProfile,
   ParseResultPayload,
-} from '../../types/extractions';
+} from '../../types-sub/extractions';
 import { cents } from '../money/money';
 import type { MoneyCents } from '../money/money';
 import { generateEntityId } from '../common/id';

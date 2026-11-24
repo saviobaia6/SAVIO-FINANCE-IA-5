@@ -1,4 +1,4 @@
-import { CdiSeriesCacheRecord, InvestmentSimulation } from '../types/investment';
+import { CdiSeriesCacheRecord, InvestmentSimulation } from '../types-sub/investment';
 import { loadJsonWithRecovery, saveJsonSafe } from './storage';
 
 export const INVESTMENT_STORAGE_KEYS = {

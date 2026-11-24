@@ -3,7 +3,7 @@ import type {
   DuplicateClassification,
   ExtractedMovement,
   ExtractionBatch,
-} from '../../types/extractions';
+} from '../../types-sub/extractions';
 import { getTransactionAmountCents, normalizeDescription } from '../../utils/financeCalculations';
 import { findMatchingScheduledTransaction } from '../transactions/ImportReconciliationService';
 

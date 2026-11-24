@@ -8,7 +8,7 @@ import {
   type ConsolidationPreferences,
   type InstitutionCategory,
   type InstitutionProfile,
-} from '../../types/extractions';
+} from '../../types-sub/extractions';
 import { computeFinancialConsolidation, inferAccountCategory } from '../../domain/extractions/consolidationEngine';
 import { fromCents, type MoneyCents } from '../../domain/money/money';
 import { formatCurrencyBRL } from '../../utils/financeCalculations';

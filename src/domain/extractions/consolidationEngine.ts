@@ -7,7 +7,7 @@ import type {
   ConsolidationSummary,
   InstitutionCategory,
   InstitutionProfile,
-} from '../../types/extractions';
+} from '../../types-sub/extractions';
 import { addMoney, cents, subtractMoney, toCents } from '../money/money';
 import type { MoneyCents } from '../money/money';
 import {

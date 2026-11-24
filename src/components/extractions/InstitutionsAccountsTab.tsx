@@ -5,7 +5,7 @@ import {
   type AccountExtensionMeta,
   type InstitutionCategory,
   type InstitutionProfile,
-} from '../../types/extractions';
+} from '../../types-sub/extractions';
 import { InstitutionCategoryBadge } from './InstitutionCategoryBadge';
 import { inferAccountCategory } from '../../domain/extractions/consolidationEngine';
 import { maskAccountNumber, maskTaxDocument } from '../../domain/extractions/fileSecurity';

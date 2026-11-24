@@ -16,7 +16,7 @@ import type {
   ExtractionBatch,
   ExtractionRule,
   InstitutionProfile,
-} from '../types/extractions';
+} from '../types-sub/extractions';
 
 export interface StoredFileRecord {
   id: string;

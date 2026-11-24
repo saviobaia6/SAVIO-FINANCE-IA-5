@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Transaction, Account, Boleto, CreditCard, Debt, Asset, EntityScope, LedgerDrilldownFilter } from '../types';
-import type { SalaryDataset } from '../types/salary';
+import type { SalaryDataset } from '../types-sub/salary';
 import {
   filterTransactionsByPeriod,
   calculatePeriodMetricsCents,

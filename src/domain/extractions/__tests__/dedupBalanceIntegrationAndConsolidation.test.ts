@@ -13,7 +13,7 @@ import {
   calculatePeriodMetricsCents,
 } from '../../../utils/financeCalculations';
 import type { Account, Asset, CreditCard, Debt, Transaction } from '../../../types';
-import type { ParseResultPayload } from '../../../types/extractions';
+import type { ParseResultPayload } from '../../../types-sub/extractions';
 
 const baseAccounts: Account[] = [
   {

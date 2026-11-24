@@ -4,7 +4,7 @@ import {
   SALARY_CATEGORY_GROUPS,
   type SalaryRecord,
   type SalarySource,
-} from '../../types/salary';
+} from '../../types-sub/salary';
 import {
   buildMonthlyEvolutionSeries,
   compareYearsSamePeriod,

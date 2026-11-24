@@ -7,7 +7,7 @@ import {
   Tooltip,
   Legend,
 } from 'recharts';
-import { MonthlySimulationSummary } from '../../types/investment';
+import { MonthlySimulationSummary } from '../../types-sub/investment';
 import { formatPercentBR } from '../../utils/investmentFormatters';
 import { usePrivacy } from '../../contexts/PrivacyContext';
 import { formatarValor } from '../../utils/formatters';

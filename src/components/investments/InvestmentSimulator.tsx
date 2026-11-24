@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   InvestmentProductType,
   InvestmentSimulation,
-} from '../../types/investment';
+} from '../../types-sub/investment';
 import { simulateProjectedInvestment } from '../../services/investmentCalculator';
 import {
   PRODUCT_TYPE_LABELS,

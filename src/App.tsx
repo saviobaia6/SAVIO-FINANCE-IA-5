@@ -13,8 +13,10 @@ import {
   CategoryRule,
   CrossEntityTransferNature,
   LedgerDrilldownFilter,
+  Direction,
+  TransactionStatus,
 } from './types';
-import type { SalaryDataset } from './types/salary';
+import type { SalaryDataset } from './types-sub/salary';
 import {
   initialTransactions,
   initialAccounts,
@@ -91,7 +93,7 @@ import {
   loadSalaryDatasetWithRecovery,
   saveSalaryDatasetSafely,
 } from './services/salaryStorage';
-import { MONTHS_PT_FULL } from './types/salary';
+import { MONTHS_PT_FULL } from './types-sub/salary';
 
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
@@ -131,7 +133,7 @@ import type {
   ExtractionIntegrationCommitResult,
   ExtractionRule,
   InstitutionProfile,
-} from './types/extractions';
+} from './types-sub/extractions';
 import { DocumentsView } from './components/DocumentsView';
 import { AiAssistantView } from './components/AiAssistantView';
 import { ReportsView } from './components/ReportsView';

@@ -22,7 +22,7 @@ import type {
   DocumentItem,
   Transaction,
 } from '../types';
-import type { SalaryDataset } from '../types/salary';
+import type { SalaryDataset } from '../types-sub/salary';
 import {
   AppDataset,
   AppSettingsSnapshot,

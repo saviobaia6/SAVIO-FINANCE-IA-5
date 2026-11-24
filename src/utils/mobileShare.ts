@@ -5,7 +5,7 @@ export interface MobileShareUrlInfo {
   isShareReadyUrl: boolean;
 }
 
-const DEFAULT_FALLBACK_ORIGIN = 'https://ais-pre-25msohbcck4gcpe4p24iba-538369928080.us-west2.run.app';
+const DEFAULT_FALLBACK_ORIGIN = 'https://ais-pre-2xdpp3ff5dutnv5tik5o67-90800945332.us-west1.run.app';
 
 /**
  * Resolves the canonical mobile-compatible share URL.

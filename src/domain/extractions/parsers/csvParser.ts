@@ -1,5 +1,5 @@
 import type { MoneyCents } from '../../money/money';
-import type { CsvColumnMapping, ParseResultPayload } from '../../../types/extractions';
+import type { CsvColumnMapping, ParseResultPayload } from '../../../types-sub/extractions';
 import {
   detectTaxDocumentNature,
   sanitizeExtractedText,

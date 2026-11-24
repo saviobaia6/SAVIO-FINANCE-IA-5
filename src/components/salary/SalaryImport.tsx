@@ -8,7 +8,7 @@ import {
   type SalaryRecord,
   type SalaryRecordStatus,
   type SalarySource,
-} from '../../types/salary';
+} from '../../types-sub/salary';
 import {
   detectSalaryImportDuplicates,
   normalizeSourceNameKey,

@@ -9,7 +9,7 @@ import {
   Tooltip,
   Legend,
 } from 'recharts';
-import { InvestmentSimulation } from '../../types/investment';
+import { InvestmentSimulation } from '../../types-sub/investment';
 import {
   formatPercentBR,
   formatIsoDateTimePtBr,

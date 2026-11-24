@@ -1,6 +1,6 @@
 import type { MoneyCents } from '../../money/money';
 import type { Account } from '../../../types';
-import type { ParseResultPayload } from '../../../types/extractions';
+import type { ParseResultPayload } from '../../../types-sub/extractions';
 import {
   detectTaxDocumentNature,
   maskAccountNumber,

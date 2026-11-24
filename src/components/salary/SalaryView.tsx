@@ -13,7 +13,7 @@ import {
   type SalaryRecord,
   type SalaryRecordStatus,
   type SalarySource,
-} from '../../types/salary';
+} from '../../types-sub/salary';
 import type { Account, Transaction } from '../../types';
 import {
   buildUnifiedIncomes,

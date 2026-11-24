@@ -6,7 +6,7 @@ import type {
   ExtractionBatch,
   ExtractionRule,
   InstitutionProfile,
-} from '../types/extractions';
+} from '../types-sub/extractions';
 
 export const DEFAULT_CONSOLIDATION_PREFS: ConsolidationPreferences = {
   mode: 'CONSOLIDATED',

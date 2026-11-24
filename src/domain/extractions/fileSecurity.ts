@@ -1,4 +1,4 @@
-import type { ExtractionFileFormat } from '../../types/extractions';
+import type { ExtractionFileFormat } from '../../types-sub/extractions';
 
 export const MAX_EXTRACTION_FILE_BYTES = 15 * 1024 * 1024; // 15 MB
 

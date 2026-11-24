@@ -3,7 +3,7 @@ import { Sheet } from '../Sheet';
 import {
   EXTRACTION_MOVEMENT_LABELS,
   type TraceabilityLookupResult,
-} from '../../types/extractions';
+} from '../../types-sub/extractions';
 import { fileStorageService } from '../../services/fileStorage';
 import { InstitutionCategoryBadge } from './InstitutionCategoryBadge';
 import {

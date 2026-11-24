@@ -3,7 +3,7 @@ import {
   CDIRate,
   InvestmentFilterPeriod,
   InvestmentProductType,
-} from '../../types/investment';
+} from '../../types-sub/investment';
 import {
   buildHistoricalComparisonWithContributions,
   compareInvestments,

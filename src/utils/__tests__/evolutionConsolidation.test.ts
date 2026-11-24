@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Account, Asset, Boleto, CreditCard, Debt, Transaction } from '../../types';
-import type { SalaryDataset } from '../../types/salary';
+import type { SalaryDataset } from '../../types-sub/salary';
 import { cents } from '../../domain/money/money';
 import { consolidateFinance, filterTransactions } from '../../domain/finance/FinanceConsolidationService';
 import { calculateAccountAnalytics } from '../../domain/accounts/AccountAnalyticsService';

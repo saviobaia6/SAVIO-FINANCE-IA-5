@@ -25,7 +25,7 @@ import {
   type InstitutionProfile,
   type ParseResultPayload,
   type TraceabilityLookupResult,
-} from '../../types/extractions';
+} from '../../types-sub/extractions';
 import {
   buildExtractionBatchFromParseResult,
   processExtractionFile,

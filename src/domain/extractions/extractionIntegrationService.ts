@@ -5,7 +5,7 @@ import type {
   ExtractionIntegrationCommitResult,
   InstitutionProfile,
   TraceabilityLookupResult,
-} from '../../types/extractions';
+} from '../../types-sub/extractions';
 import { addMoney, cents, fromCents, subtractMoney, toCents } from '../money/money';
 import type { MoneyCents } from '../money/money';
 import { generateEntityId } from '../common/id';

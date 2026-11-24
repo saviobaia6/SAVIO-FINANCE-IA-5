@@ -3,7 +3,7 @@ import type {
   AccountExtensionMeta,
   IdentifiedAccountInfo,
   InstitutionProfile,
-} from '../../types/extractions';
+} from '../../types-sub/extractions';
 import { maskAccountNumber } from './fileSecurity';
 import { inferCategoryFromText, resolveInstitutionMatch } from './institutionRegistry';
 import { findBankByCodeOrIspb } from './banksRepository';

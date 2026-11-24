@@ -7,7 +7,7 @@ import type {
   ForeignExchangeMeta,
   InstitutionCategory,
   InvestmentBreakdownMeta,
-} from '../../types/extractions';
+} from '../../types-sub/extractions';
 import { categorizeTransactionDescription } from '../transactions/CategorizationService';
 import { classifyIncomeOrigin } from '../finance/FinanceConsolidationService';
 import { cents } from '../money/money';

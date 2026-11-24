@@ -4,7 +4,7 @@ import type {
   SalaryImportResult,
   SalaryRecord,
   SalarySource,
-} from '../types/salary';
+} from '../types-sub/salary';
 import { formatReferenceMonth } from '../utils/salaryCalculations';
 import { generateEntityId } from '../domain/common/id';
 

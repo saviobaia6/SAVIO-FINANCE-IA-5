@@ -1,6 +1,6 @@
 import { cents, addMoney, subtractMoney } from '../money/money';
 import type { MoneyCents } from '../money/money';
-import type { ExtractedMovement, StatementBalanceSummary } from '../../types/extractions';
+import type { ExtractedMovement, StatementBalanceSummary } from '../../types-sub/extractions';
 
 export function computeStatementBalanceSummary(params: {
   movements: ExtractedMovement[];

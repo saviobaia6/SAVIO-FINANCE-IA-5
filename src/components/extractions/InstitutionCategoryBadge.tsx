@@ -12,7 +12,7 @@ import {
 import {
   INSTITUTION_CATEGORY_LABELS,
   type InstitutionCategory,
-} from '../../types/extractions';
+} from '../../types-sub/extractions';
 
 interface Props {
   category: InstitutionCategory;

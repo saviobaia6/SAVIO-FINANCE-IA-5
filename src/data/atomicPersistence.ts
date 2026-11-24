@@ -10,7 +10,7 @@ import type {
   Transaction,
   TransactionReversalRecord,
 } from '../types';
-import type { SalaryDataset } from '../types/salary';
+import type { SalaryDataset } from '../types-sub/salary';
 import { saveSalaryDatasetSafely } from '../services/salaryStorage';
 
 export interface AtomicMutationBatch {

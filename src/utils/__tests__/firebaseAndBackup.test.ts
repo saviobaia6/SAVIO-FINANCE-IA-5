@@ -279,20 +279,20 @@ describe('Inicialização Vazia, Proteção de Dados, Auth, Sync & Backup Duplo'
 
   it('gera link compatível com celular convertendo ais-dev para ais-pre e monta link do WhatsApp', () => {
     const devResolved = resolveMobileShareInfo(
-      'https://ais-dev-25msohbcck4gcpe4p24iba-538369928080.us-west2.run.app'
+      'https://ais-dev-2xdpp3ff5dutnv5tik5o67-90800945332.us-west1.run.app'
     );
     expect(devResolved.isPreviewDevUrl).toBe(true);
     expect(devResolved.isShareReadyUrl).toBe(true);
     expect(devResolved.shareUrl).toBe(
-      'https://ais-pre-25msohbcck4gcpe4p24iba-538369928080.us-west2.run.app'
+      'https://ais-pre-2xdpp3ff5dutnv5tik5o67-90800945332.us-west1.run.app'
     );
 
     const preResolved = resolveMobileShareInfo(
-      'https://ais-pre-25msohbcck4gcpe4p24iba-538369928080.us-west2.run.app'
+      'https://ais-pre-2xdpp3ff5dutnv5tik5o67-90800945332.us-west1.run.app'
     );
     expect(preResolved.isPreviewDevUrl).toBe(false);
     expect(preResolved.shareUrl).toBe(
-      'https://ais-pre-25msohbcck4gcpe4p24iba-538369928080.us-west2.run.app'
+      'https://ais-pre-2xdpp3ff5dutnv5tik5o67-90800945332.us-west1.run.app'
     );
 
     const waUrl = buildWhatsAppShareUrl(preResolved.shareUrl);
@@ -303,8 +303,8 @@ describe('Inicialização Vazia, Proteção de Dados, Auth, Sync & Backup Duplo'
   it('valida origem por Referer em navegadores móveis e garante where(ownerUid) nas queries do Firestore', () => {
     expect(
       isOriginAllowedForAi({
-        referer: 'https://ais-pre-25msohbcck4gcpe4p24iba-538369928080.us-west2.run.app/dashboard',
-        host: 'ais-pre-25msohbcck4gcpe4p24iba-538369928080.us-west2.run.app',
+        referer: 'https://ais-pre-2xdpp3ff5dutnv5tik5o67-90800945332.us-west1.run.app/dashboard',
+        host: 'ais-pre-2xdpp3ff5dutnv5tik5o67-90800945332.us-west1.run.app',
         nodeEnv: 'production',
       })
     ).toBe(true);
@@ -312,7 +312,7 @@ describe('Inicialização Vazia, Proteção de Dados, Auth, Sync & Backup Duplo'
     expect(
       isOriginAllowedForAi({
         origin: 'https://evil-site.example.com',
-        host: 'ais-pre-25msohbcck4gcpe4p24iba-538369928080.us-west2.run.app',
+        host: 'ais-pre-2xdpp3ff5dutnv5tik5o67-90800945332.us-west1.run.app',
         nodeEnv: 'production',
       })
     ).toBe(false);

@@ -1,4 +1,4 @@
-import type { InstitutionCategory, InstitutionProfile } from '../../types/extractions';
+import type { InstitutionCategory, InstitutionProfile } from '../../types-sub/extractions';
 
 const NOW_ISO = '2026-01-01T00:00:00.000Z';
 

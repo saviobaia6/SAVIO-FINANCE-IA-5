@@ -1,4 +1,4 @@
-import { CDIRate, CdiSeriesCacheRecord } from '../types/investment';
+import { CDIRate, CdiSeriesCacheRecord } from '../types-sub/investment';
 import { loadCachedCdiSeries, saveCachedCdiSeries } from './investmentStorage';
 import { enqueueOfflineTask } from '../core/sync/offlineQueue';
 

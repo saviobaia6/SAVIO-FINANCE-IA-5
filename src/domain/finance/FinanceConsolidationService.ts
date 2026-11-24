@@ -9,7 +9,7 @@ import type {
   Transaction,
   TransactionStatus,
 } from '../../types';
-import type { SalaryCategory, SalaryDataset, SalarySource } from '../../types/salary';
+import type { SalaryCategory, SalaryDataset, SalarySource } from '../../types-sub/salary';
 import {
   deriveAccountBalances,
   isCardBillPaymentTransaction,

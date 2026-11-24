@@ -16,7 +16,7 @@ import { computeWindowedRange } from '../../components/VirtualList';
 import { sanitizeMoneyKeystrokes } from '../../components/MoneyInputField';
 import { buildComparativeChartSeries } from '../../components/investments/GraficoComparativo';
 import { getAnnualTotal, getMonthlyTotal } from '../salaryCalculations';
-import type { SalaryRecord, SalarySource } from '../../types/salary';
+import type { SalaryRecord, SalarySource } from '../../types-sub/salary';
 
 function createMemoryStorage(): Storage {
   const store = new Map<string, string>();

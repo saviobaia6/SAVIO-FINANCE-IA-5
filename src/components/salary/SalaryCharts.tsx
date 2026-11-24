@@ -14,7 +14,7 @@ import {
   Tooltip,
   Legend,
 } from 'recharts';
-import type { SalaryRecord, SalarySource } from '../../types/salary';
+import type { SalaryRecord, SalarySource } from '../../types-sub/salary';
 import {
   buildMonthlyEvolutionSeries,
   compareYearsSamePeriod,

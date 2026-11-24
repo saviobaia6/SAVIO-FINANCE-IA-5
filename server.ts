@@ -560,8 +560,8 @@ REGRAS ESTRITAS:
                         descricao: { type: Type.STRING, description: 'Nome limpo do estabelecimento' },
                         valor: { type: Type.NUMBER, description: 'Negativo para estornos/descontos' },
                         tipo: { type: Type.STRING, enum: ['avista', 'parcelada'] },
-                        parcela_atual: { type: Type.INTEGER },
-                        total_parcelas: { type: Type.INTEGER },
+                        parcela_atual: { type: Type.NUMBER },
+                        total_parcelas: { type: Type.NUMBER },
                         categoria: {
                           type: Type.STRING,
                           enum: [...INVOICE_AUDITOR_CATEGORIES],
@@ -597,11 +597,12 @@ REGRAS ESTRITAS:
 
       return res.json(sanitized);
     } catch (error: unknown) {
+      console.error('Audit card invoice error details:', error);
       if (isCsv && decodedCsvText.trim()) {
         return res.json(auditCardCsvContent(decodedCsvText, fileName));
       }
       const formatted = formatAiErrorResponse(error);
-      console.error('Audit card invoice error:', formatted.status);
+      console.error('Audit card invoice error status:', formatted.status, formatted.message);
       return res.status(formatted.status).json({ error: formatted.message });
     }
   });

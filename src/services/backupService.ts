@@ -9,7 +9,7 @@ import {
   CategoryBudget,
   CategoryRule,
 } from '../types';
-import type { SalaryDataset } from '../types/salary';
+import type { SalaryDataset } from '../types-sub/salary';
 import { db } from './indexedDb';
 import { fileStorageService, FileReferenceInfo } from './fileStorage';
 import { STORAGE_SCHEMA_VERSION, STORAGE_KEYS, saveJsonSafe } from './storage';
